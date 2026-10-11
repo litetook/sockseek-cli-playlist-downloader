@@ -1,4 +1,4 @@
-# Soulseek-Batch
+# sockseek CLI playlist downloader
 
 Give it a list of tracks. It tells you which ones you already have, which ones are missing, and
 downloads only the missing ones from Soulseek — after you say yes.

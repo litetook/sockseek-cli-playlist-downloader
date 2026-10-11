@@ -1,4 +1,4 @@
-# soulseek
+# sockseek CLI playlist downloader - reference
 
 Downloads playlists from Soulseek by driving [sockseek](https://github.com/fiso64/sockseek).
 You give it text files with `Artist - Title | 4:09` lines; it shows what of each playlist is
