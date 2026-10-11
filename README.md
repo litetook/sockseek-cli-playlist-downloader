@@ -367,4 +367,5 @@ ones skip without ffmpeg. **Never point a test at the real server** — one stra
 
 ---
 
-Not affiliated with Soulseek or sockseek. Use it for music you are allowed to have.
+MIT licensed — see [LICENSE](LICENSE). Not affiliated with Soulseek or sockseek. Use it for
+music you are allowed to have.
