@@ -341,8 +341,6 @@ logs/                  run_<NNNN>_<time>.log per run, run_seq.txt holds the last
 soulseek/              the engine, one module per component
 tests/                 one test module per component
 docs/README.md         the detailed manual: every option, every trap, with evidence
-TASK.md                the development log (Ukrainian): what was measured, and what was wrong
-REAL-RUN.md            the protocol of every real run against live Soulseek
 ```
 
 ## Tests
