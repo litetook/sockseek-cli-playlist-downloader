@@ -40,8 +40,9 @@ from .runner import (ERROR, FAILED, NAME_FORMAT, OK, Options, RETRY_PAUSE_S, Soc
                      build_command, kill_tree, run_process, run_with_retry)
 from .settings import (APP_DIR, CONFIG_NAME, CONFIG_TEMPLATE, CREDENTIAL_KEYS,
                        LEGACY_CONFIG_NAME, LOCAL_CONF_TEMPLATE, PATH_DEFAULTS, PATH_KEYS,
-                       SETTINGS, SOCKSEEK_CONF, SOCKSEEK_EFFECTIVE_CONF, SOCKSEEK_LOCAL_CONF,
-                       Setting, check_value, config_paths, effective_conf, load_config,
-                       merge_conf, missing_credentials, parse_conf, parse_yaml, read_min_bitrate)
+                       SETTINGS, SOCKSEEK_CONF, SOCKSEEK_CONF_TEMPLATE,
+                       SOCKSEEK_EFFECTIVE_CONF, SOCKSEEK_LOCAL_CONF, Setting, check_value,
+                       config_paths, effective_conf, ensure_files, load_config, merge_conf,
+                       missing_credentials, parse_conf, parse_yaml, read_min_bitrate)
 
 __all__ = [name for name in dir() if not name.startswith("_")]

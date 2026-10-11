@@ -211,6 +211,14 @@ def main(argv: Optional[list[str]] = None,
         out(f"sockseek-cli {soulseek.__version__}")
         return 0
 
+    created = soulseek.ensure_files(APP_DIR, out)
+    if soulseek.SOCKSEEK_LOCAL_CONF in created:
+        out("")
+        out(f"Put your Soulseek login in {APP_DIR / soulseek.SOCKSEEK_LOCAL_CONF}:")
+        out("    username = your-soulseek-login")
+        out("    password = your-soulseek-password")
+        out("Then run this again. Nothing can be downloaded until then.")
+        return 2
     config = soulseek.load_config(args.config or APP_DIR / soulseek.CONFIG_NAME, warn=out)
     folders = soulseek.config_paths(config, APP_DIR)
     playlists_dir = args.playlists or folders["playlists"]
@@ -249,8 +257,6 @@ def main(argv: Optional[list[str]] = None,
             chosen = [infos[n] for n in picked]
             break
 
-    if not _have_sockseek(config, ask if not args.yes else None, out):
-        return 2
     worst = 0
     for info in chosen:
         out("")
@@ -265,6 +271,10 @@ def main(argv: Optional[list[str]] = None,
         if not args.yes and not _confirm(ask, len(info.missing)):
             out("Skipped.")
             continue
+        # the tool is asked for only once the answer is yes: nobody wants to be asked about a
+        # 50 MB download before seeing what it would be for
+        if not _have_sockseek(config, ask if not args.yes else None, out):
+            return 2
         out("")
         code = engine(["--only", info.name] + extra)
         worst = max(worst, code)

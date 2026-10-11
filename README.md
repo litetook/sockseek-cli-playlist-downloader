@@ -101,8 +101,16 @@ py setup.py --upgrade    re-pin dependencies.yaml to the newest releases, then i
 ```
 
 **Running it is optional.** A run that needs a tool it cannot find offers to fetch exactly that
-one and then carries on, so it makes no difference whether you ran setup first. Already have the
-binaries? Then nothing is downloaded and nothing changes.
+one — after you have chosen a playlist and confirmed the download, never before:
+
+```
+Download these 3? [y] yes  [n] no: y
+sockseek is not at …\sockseek.exe
+sockseek 3.0.5 is missing. Download it? [y] yes  [n] no:
+```
+
+So it makes no difference whether you ran setup first. Already have the binaries? Then nothing
+is downloaded and nothing changes.
 
 On macOS the tools are made executable automatically; the first launch may still need
 **System Settings → Privacy & Security → Open Anyway**, because they are not notarised by Apple.
@@ -113,17 +121,29 @@ On macOS the tools are made executable automatically; the first launch may still
 
 ### 3. Your Soulseek login
 
-The first run creates **`sockseek.local.conf`** next to `run.py`. Put your account in it:
+The first run creates the three files it needs and then stops, because nothing can be downloaded
+until it knows who you are:
 
 ```
-username = your-soulseek-login
-password = your-soulseek-password
+py run.py
+  WARN created config.yaml from the built-in template
+  WARN created sockseek.conf from the built-in template
+  WARN created sockseek.local.conf: put your Soulseek login there
+
+  Put your Soulseek login in …\sockseek.local.conf:
+      username = your-soulseek-login
+      password = your-soulseek-password
+  Then run this again. Nothing can be downloaded until then.
 ```
 
-That file is git-ignored, it is the only file that holds secrets, and nothing in the logs ever
-prints its values. Until it has a real login, a run stops with a message instead of failing
-somewhere inside sockseek. See [Configuration](#configuration) — the same file can override any
-other setting, and you can point at a different one per run.
+Fill those two lines in and run it again. That file is git-ignored, it is the only file that
+holds secrets, and nothing in the logs ever prints its values. See
+[Configuration](#configuration) — the same file can override any other setting, and you can
+point at a different one per run.
+
+`config.yaml` and `sockseek.conf` are in the repository already; they are only written from the
+built-in templates when they are missing, so deleting one gets the documented values back
+instead of silently losing them.
 
 ### 4. A playlist
 

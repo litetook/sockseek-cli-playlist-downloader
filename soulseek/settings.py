@@ -41,6 +41,27 @@ search:
   playlist_timeout_min: 10
 """
 
+# sockseek.conf is recreated when it is missing, like config.yaml: it carries measured
+# decisions (the 256 kbps floor, the 30 s wait, the lifted ranking cap), and losing them
+# silently would quietly change every run. docs/README.md section 7 explains each key.
+SOCKSEEK_CONF_TEMPLATE = """\
+# username =
+# password =
+
+max-stale-time = 30000
+
+min-bitrate = 256
+pref-min-bitrate = 320
+pref-max-bitrate = 1000000
+pref-format = flac,wav,mp3
+
+fast-search = true
+fast-search-delay = 2000
+fast-search-min-up-speed = 200
+pref-strict-title = true
+pref-strict-artist = true
+"""
+
 PATH_KEYS = ("sockseek", "playlists", "output")
 PATH_DEFAULTS = {"sockseek": "sockseek.exe", "playlists": "Playlists", "output": "output"}
 
@@ -286,6 +307,36 @@ def missing_credentials(text: str) -> list[str]:
             if not values.get(key) or values[key].startswith("your-soulseek-")]
 
 
+def ensure_files(app_dir: Path, warn: Optional[Callable[[str], None]] = None) -> list[str]:
+    """Create the files a fresh clone needs, and name the ones that were created.
+
+    All three are made here rather than deep inside a run: the first thing a new user should
+    see is "put your login in this file", not an error after a 50 MB download.
+    """
+    if warn is None:
+        def warn(message: str) -> None:
+            print(message, file=sys.stderr)
+    created: list[str] = []
+    for name, text in ((CONFIG_NAME, CONFIG_TEMPLATE),
+                       (SOCKSEEK_CONF, SOCKSEEK_CONF_TEMPLATE),
+                       (SOCKSEEK_LOCAL_CONF, LOCAL_CONF_TEMPLATE)):
+        path = app_dir / name
+        if path.exists():
+            continue
+        try:
+            path.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            warn(f"WARN cannot create {name}: {exc}")
+            continue
+        created.append(name)
+        if name == SOCKSEEK_LOCAL_CONF:
+            warn(f"WARN created {name}: put your Soulseek login there "
+                 f"(it is git-ignored and overrides {SOCKSEEK_CONF})")
+        else:
+            warn(f"WARN created {name} from the built-in template")
+    return created
+
+
 def effective_conf(app_dir: Path, work_dir: Path,
                    warn: Optional[Callable[[str], None]] = None,
                    extra: Optional[Path] = None) -> Path:
@@ -300,14 +351,8 @@ def effective_conf(app_dir: Path, work_dir: Path,
     if warn is None:
         def warn(message: str) -> None:
             print(message, file=sys.stderr)
+    ensure_files(app_dir, warn)  # a run started through the engine alone still gets them
     local_path = app_dir / SOCKSEEK_LOCAL_CONF
-    if not local_path.exists():
-        try:
-            local_path.write_text(LOCAL_CONF_TEMPLATE, encoding="utf-8")
-            warn(f"WARN created {local_path.name}: put your Soulseek login there "
-                 f"(it is git-ignored and overrides {SOCKSEEK_CONF})")
-        except OSError as exc:
-            warn(f"WARN cannot create {local_path.name}: {exc}")
 
     def text_of(path: Optional[Path]) -> str:
         if path is None or not path.is_file():

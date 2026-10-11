@@ -539,3 +539,53 @@ class MergeKeepsTheLoginOutOfProfiles(unittest.TestCase):
     def test_without_a_profile_nothing_changes_about_the_old_behaviour(self):
         merged = sb.merge_conf("min-bitrate = 256\n", "username = u\n")
         self.assertEqual(sb.parse_conf(merged), {"min-bitrate": "256", "username": "u"})
+
+
+class FirstRunFiles(unittest.TestCase):
+    """A fresh clone gets its three files, and a deleted one comes back from the template."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+        self.warnings: list[str] = []
+
+    def test_all_three_are_created_and_named(self):
+        created = sb.ensure_files(self.dir, self.warnings.append)
+        self.assertEqual(sorted(created), sorted([sb.CONFIG_NAME, sb.SOCKSEEK_CONF,
+                                                  sb.SOCKSEEK_LOCAL_CONF]))
+        for name in created:
+            self.assertTrue((self.dir / name).is_file(), name)
+
+    def test_the_login_file_gets_the_instruction_not_just_a_notice(self):
+        sb.ensure_files(self.dir, self.warnings.append)
+        self.assertTrue(any(sb.SOCKSEEK_LOCAL_CONF in w and "login" in w for w in self.warnings),
+                        self.warnings)
+
+    def test_a_file_that_is_there_is_left_alone(self):
+        (self.dir / sb.CONFIG_NAME).write_text("search:\n  retries: 7\n", encoding="utf-8")
+        created = sb.ensure_files(self.dir, self.warnings.append)
+        self.assertNotIn(sb.CONFIG_NAME, created)
+        self.assertEqual(sb.load_config(self.dir / sb.CONFIG_NAME)["retries"], 7)
+
+    def test_a_deleted_sockseek_conf_comes_back_with_the_measured_values(self):
+        # losing it silently would drop the 256 kbps floor and the 30 s wait from every run
+        sb.ensure_files(self.dir, self.warnings.append)
+        (self.dir / sb.SOCKSEEK_CONF).unlink()
+        self.assertEqual(sb.ensure_files(self.dir, self.warnings.append), [sb.SOCKSEEK_CONF])
+        text = (self.dir / sb.SOCKSEEK_CONF).read_text(encoding="utf-8")
+        self.assertEqual(sb.read_min_bitrate(self.dir / sb.SOCKSEEK_CONF), 256)
+        self.assertEqual(sb.parse_conf(text)["max-stale-time"], "30000")
+        self.assertEqual(sb.missing_credentials(text), list(sb.CREDENTIAL_KEYS))
+
+    def test_the_shipped_conf_is_the_template_itself(self):
+        shipped = sb.APP_DIR / sb.SOCKSEEK_CONF
+        if not shipped.is_file():
+            self.skipTest("no sockseek.conf in the app folder")
+        self.assertEqual(shipped.read_text(encoding="utf-8"), sb.SOCKSEEK_CONF_TEMPLATE)
+
+    def test_a_run_through_the_engine_alone_still_gets_them(self):
+        work = self.dir / "work"
+        sb.effective_conf(self.dir, work, self.warnings.append)
+        self.assertTrue((self.dir / sb.SOCKSEEK_LOCAL_CONF).is_file())
+        self.assertTrue((self.dir / sb.SOCKSEEK_CONF).is_file())

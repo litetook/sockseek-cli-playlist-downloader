@@ -220,3 +220,62 @@ class ChoiceIsNotFooledByOddDigits(unittest.TestCase):
 
     def test_plain_numbers_still_work(self):
         self.assertEqual(run.parse_choice("2", 3), [1])
+
+
+class FirstRunAndTheOrderOfQuestions(AppCase):
+    """What a new user sees, and when they are asked about a 50 MB download."""
+
+    def ui(self, *answers, argv=(), bare=False):
+        said, calls, printed = list(answers), [], []
+
+        def ask(prompt):
+            printed.append(prompt)
+            if not said:
+                raise EOFError
+            return said.pop(0)
+
+        if bare:  # the fixture creates a login and a binary; a fresh clone has neither
+            (self.tmp / sb.SOCKSEEK_LOCAL_CONF).unlink(missing_ok=True)
+            for name in ("sockseek.exe", "sockseek"):
+                (self.tmp / name).unlink(missing_ok=True)
+        with mock.patch.object(run, "APP_DIR", self.tmp):
+            code = run.main(list(argv), ask=ask, out=printed.append,
+                            engine=lambda args: calls.append(list(args)) or 0)
+        return code, "\n".join(printed), calls
+
+    def test_a_first_run_asks_for_the_login_and_stops(self):
+        self.playlist("A - One | 1:00\n")
+        code, text, calls = self.ui(bare=True)
+        self.assertEqual((code, calls), (2, []))
+        self.assertIn("Put your Soulseek login in", text)
+        self.assertIn("Then run this again", text)
+        self.assertTrue((self.tmp / sb.SOCKSEEK_LOCAL_CONF).is_file())
+        self.assertNotIn("Playlists:", text)  # no menu before the one thing that must be done
+
+    def test_the_second_run_shows_the_menu(self):
+        self.playlist("A - One | 1:00\n")
+        self.ui(bare=True)  # creates the file
+        (self.tmp / sb.SOCKSEEK_LOCAL_CONF).write_text("username = u\npassword = p\n",
+                                                       encoding="utf-8")
+        code, text, calls = self.ui("")
+        self.assertIn("Playlists:", text)
+        self.assertEqual(code, 0)
+
+    def test_the_tool_is_asked_about_only_after_the_download_is_confirmed(self):
+        self.playlist("A - One | 1:00\n")
+        for name in ("sockseek.exe", "sockseek"):
+            (self.tmp / name).unlink(missing_ok=True)
+        code, text, calls = self.ui("1", "y", "n")
+        self.assertEqual((code, calls), (2, []))
+        self.assertLess(text.index("Missing:"), text.index("Download these 1?"))
+        self.assertLess(text.index("Download these 1?"), text.index("sockseek 3.0.5 is missing"))
+        self.assertIn("py setup.py", text)
+
+    def test_saying_no_to_the_tracks_never_mentions_the_tool(self):
+        self.playlist("A - One | 1:00\n")
+        for name in ("sockseek.exe", "sockseek"):
+            (self.tmp / name).unlink(missing_ok=True)
+        code, text, calls = self.ui("1", "n")
+        self.assertEqual((code, calls), (0, []))
+        self.assertNotIn("is missing. Download it?", text)  # never asked about the 50 MB
+        self.assertNotIn("py setup.py", text)
