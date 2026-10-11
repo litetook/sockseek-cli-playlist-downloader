@@ -21,7 +21,7 @@ Standard library only.
 """
 from __future__ import annotations
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 from .batch import Batch, Result, RunConfig, next_run_number, run_batch, run_label, SEQ_NAME
 from .cli import describe_config, main, options_from_args, parse_args

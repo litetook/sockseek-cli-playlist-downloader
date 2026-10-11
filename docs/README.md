@@ -194,7 +194,14 @@ or 3) AND the file is really on disk. An index row whose file was deleted reads 
 File names alone cannot be used for this: they come from the uploader
 (`... (Clean) 1A 142 [www.dj-promo.org].mp3`) and no longer carry the playlist line.
 
-`run.cmd` is a thin shim around `py run.py`; it pauses at the end only when double-clicked.
+`run.cmd` is a thin shim around `py run.py`; it pauses at the end only when double-clicked
+(`if "%~1"=="" pause`), so a scheduled run with arguments does not hang waiting for a key.
+
+An interactive run opens with the source menu - a `.txt` already on disk, a Spotify link or a
+SoundCloud link - and only then shows the playlist table. A link is saved into `Playlists/`
+first and then goes through the same confirmation and download as any file, which is why there
+is no separate "download from a link" path to keep in step. `--only`, `--yes` and `--import`
+skip the menu entirely: a scripted run has already said where to look.
 
 **Exit code `1` means this tool failed, not that a track is unavailable.** A track nobody shares
 is news about Soulseek, and on a playlist of SoundCloud edits it is the normal case; every

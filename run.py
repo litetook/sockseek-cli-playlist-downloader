@@ -2,8 +2,10 @@
 
     py run.py
 
-Shows every playlist with how much of it is already on disk, asks which one to work on, shows
-exactly which tracks are missing, and downloads only those after an explicit yes. Re-running
+Asks where the list comes from - a .txt file you already have, a Spotify link or a
+SoundCloud link - then shows every playlist with how much of it is already on disk, asks which
+one to work on, shows exactly which tracks are missing, and downloads only those after an
+explicit yes. A link is saved as a .txt first, so it joins the same flow. Re-running
 the same playlist later is the normal workflow: what arrives depends on who is online right
 now (proven 2026-10-07: a track absent on the 6th arrived on the 7th as flac 893 kbps).
 
@@ -86,6 +88,47 @@ def format_table(infos: list[Info]) -> list[str]:
     return lines
 
 
+SERVICE_NAMES = {"spotify": "Spotify", "soundcloud": "SoundCloud"}
+SOURCES = (("1", "txt", "download a playlist from a .txt file"),
+           ("2", "spotify", "save a .txt from a Spotify link, then download it"),
+           ("3", "soundcloud", "save a .txt from a SoundCloud link, then download it"))
+
+
+def _source_menu(ask: Callable[[str], str], out: Callable[[str], None]) -> Optional[str]:
+    """The first question of an interactive run. None means quit.
+
+    A scripted run (--only, --import, --yes) never sees this: it already said where to look.
+    """
+    out("Where from?")
+    out("")
+    for key, _, text in SOURCES:
+        out(f"  {key}  {text}")
+    out("")
+    while True:
+        try:
+            answer = ask("Pick one (Enter quits): ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return None
+        if not answer:
+            return None
+        for key, name, _ in SOURCES:
+            if answer in (key, name):
+                return name
+        out("Type 1, 2 or 3, or Enter to quit.")
+
+
+def _ask_for_link(service: str, ask: Callable[[str], str],
+                  out: Callable[[str], None]) -> Optional[str]:
+    """The link for option 2 or 3. None means the person changed their mind."""
+    out("")
+    try:
+        url = ask(f"Paste the {SERVICE_NAMES.get(service, service)} link "
+                  f"(Enter cancels): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    return url or None
+
+
 def parse_choice(text: str, count: int) -> Optional[list[int]]:
     """"1" -> [0]; "1,3" -> [0, 2]; "all" -> everything; "" -> []. None means "not understood".
 
@@ -139,11 +182,28 @@ def _import_link(url: str, playlists_dir: Path, name: Optional[str], overwrite: 
                  out: Callable[[str], None], config: dict, cookies_from: Optional[str],
                  ask: Optional[Callable[[str], str]],
                  reader: Optional[soulseek.LinkReader] = None) -> int:
-    """--import <link>: write a playlist from a Spotify or SoundCloud link.
+    """--import <link>: write the playlist file and stop there."""
+    code, written = _link_to_playlist(url, playlists_dir, name, overwrite, out, config,
+                                      cookies_from, ask, reader)
+    if written is not None:
+        out(f"Now run: py run.py --only {written.stem}")
+    return code
+
+
+def _link_to_playlist(url: str, playlists_dir: Path, name: Optional[str], overwrite: bool,
+                      out: Callable[[str], None], config: dict, cookies_from: Optional[str],
+                      ask: Optional[Callable[[str], str]],
+                      reader: Optional[soulseek.LinkReader] = None,
+                      ask_overwrite: bool = False) -> tuple[int, Optional[Path]]:
+    """A Spotify or SoundCloud link -> a playlist file. Returns (exit code, the file).
 
     Only the track list is taken. The downloading stays with the engine, so a link ends up in
     the same place a hand-written list does: a file you can read, edit and re-run.
     """
+    if soulseek.detect(url) is None:
+        out(f"Not a link this tool can read: {url}")
+        out("Spotify and SoundCloud playlists are supported.")
+        return 2, None
     tool = None
     if soulseek.detect(url) == "soundcloud":
         # sockseek has no SoundCloud input type, so this one needs yt-dlp - fetched on demand,
@@ -155,24 +215,43 @@ def _import_link(url: str, playlists_dir: Path, name: Optional[str], overwrite: 
                                     lambda question: _yes(ask, question))
         if tool is None:
             out("Without yt-dlp a SoundCloud link cannot be read. Run: py setup.py --all")
-            return 2
+            return 2, None
     out(f"Reading {url}")
     linked = (reader or soulseek.LinkReader()).read(url, tool, cookies_from)
     for warning in linked.warnings:
         out(f"WARN {warning}")
     if not linked.lines:
         out("Nothing imported.")
-        return 2
+        return 2, None
     stem = name or soulseek.slug(linked.name) or "playlist"
+    target = playlists_dir / f"{stem}.txt"
+    if target.is_file() and not overwrite and ask_overwrite and ask is not None:
+        # a playlist is hand-edited, so the choice is the person's, not a flag's
+        overwrite = _replace(ask, target.name)
+        if not overwrite:
+            out(f"Keeping {target.name} as it is.")
+            return 0, target
     written, refused = soulseek.write_playlist(linked.lines, playlists_dir, stem, overwrite)
     if written is None:
         out(f"Nothing written: {refused}. Pass --overwrite to replace it.")
-        return 2
+        return 2, None
     with_length = sum(1 for line in linked.lines if "|" in line)
     out(f"{written.name}: {len(linked.lines)} track(s) from {linked.source}"
         f"{f' ({linked.name})' if linked.name else ''}, {with_length} with a length.")
-    out(f"Now run: py run.py --only {written.stem}")
-    return 0
+    return 0, written
+
+
+def _replace(ask: Callable[[str], str], name: str) -> bool:
+    """Replace the existing playlist, or keep it and work on what is already in it."""
+    while True:
+        try:
+            answer = ask(f"{name} already exists. [r] replace  [k] keep it: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return False
+        if answer in ("r", "replace"):
+            return True
+        if answer in ("k", "keep", ""):
+            return False
 
 
 def _yes(ask: Callable[[str], str], question: str) -> bool:
@@ -285,17 +364,39 @@ def main(argv: Optional[list[str]] = None,
         return _import(Path(args.import_source), playlists_dir, args.import_name,
                        args.overwrite, out)
 
-    infos = scan(playlists_dir, output_dir)
-    if not infos:
-        out(f"No playlist .txt files in {playlists_dir}")
-        return 2
+    # the opening question comes before the scan: with an empty Playlists folder, pasting a
+    # link is exactly what a new user needs, and "no playlist files" would be a dead end
+    source = "txt"
+    if ask is not None and not args.only and not args.yes:
+        source = _source_menu(ask, out)
+        if source is None:
+            return 0
 
-    if args.only:
+    if source != "txt":
+        url = _ask_for_link(source, ask, out)
+        if url is None:
+            return 0
+        code, written = _link_to_playlist(url, playlists_dir, args.import_name, args.overwrite,
+                                          out, config, args.cookies_from, ask, reader,
+                                          ask_overwrite=True)
+        if written is None:
+            return code
+        infos = scan(playlists_dir, output_dir)
+        chosen = [i for i in infos if i.name == written.stem]
+        if not chosen:
+            out(f"Wrote {written.name}, but reading it back found nothing. Look at the file.")
+            return 1
+    elif args.only:
+        infos = scan(playlists_dir, output_dir)
         chosen = [i for i in infos if i.name == args.only]
         if not chosen:
             out(f"No playlist named '{args.only}' in {playlists_dir}")
             return 2
     else:
+        infos = scan(playlists_dir, output_dir)
+        if not infos:
+            out(f"No playlist .txt files in {playlists_dir}")
+            return 2
         out("Playlists:")
         out("")
         for line in format_table(infos):

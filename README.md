@@ -94,10 +94,40 @@ a track that was nowhere on 2026-10-06 arrived on 2026-10-07 as a 893 kbps flac,
 changed in the code. On a fresh 10-track list the first run brought 6, a run 30 seconds later
 brought 2 more, a third brought the last 2.
 
+Double-click `run.cmd` (Windows) or run `py run.py`, and the first question is where the
+list comes from:
+
+```
+Where from?
+
+  1  download a playlist from a .txt file
+  2  save a .txt from a Spotify link, then download it
+  3  save a .txt from a SoundCloud link, then download it
+
+Pick one (Enter quits):
+```
+
+**1** goes to the playlist chooser below. **2** and **3** ask for a link, save it as a `.txt`
+in `Playlists/` and then carry straight on with it - the link and the file end up in exactly
+the same flow, and a saved list can be re-run tomorrow like any other.
+
+```
+  #  playlist                      tracks  here  missing
+  -  ----------------------------  ------  ----  -------
+  1  classics-test                     10    10        0
+  2  melodic-ambient-playlist          25    25        0
+  3  techno-2026                       30    15       15
+
+What to download? (1, or 1,2, or all; Enter quits):
+```
+
+Then the missing tracks are listed by name, and only after a separate yes does anything get
+downloaded.
+
 ```bash
-py run.py                              # pick a playlist, see what is missing, confirm
-py run.py --only my-playlist           # skip the menu
-py run.py --only my-playlist --yes     # skip the confirmation too
+py run.py                              # the menu above
+py run.py --only my-playlist           # straight to one playlist, no menu
+py run.py --only my-playlist --yes     # no questions at all, for a scheduled run
 ```
 
 Every run:

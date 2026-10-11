@@ -45,9 +45,15 @@ class RunUi(AppCase):
         (out / "_index.csv").write_text(INDEX_HEADER + "".join(r + "\n" for r in rows),
                                         encoding="utf-8")
 
-    def ui(self, *answers, argv=()):
-        """run.main with scripted answers. Returns (exit code, everything printed, engine calls)."""
-        said, calls, printed = list(answers), [], []
+    def ui(self, *answers, argv=(), source="1"):
+        """run.main with scripted answers. Returns (exit code, everything printed, engine calls).
+
+        `source` answers the opening "where from?" menu, which every interactive run starts
+        with; these tests are about what happens after a .txt playlist was chosen, so it
+        defaults to 1. The menu itself is tested in test_links.py.
+        """
+        said = ([] if source is None else [source]) + list(answers)
+        calls, printed = [], []
 
         def ask(prompt):
             printed.append(prompt)
@@ -151,8 +157,9 @@ class PathFlagsAreNotOnlyPassedOn(AppCase):
     "Nothing to do" and exited 0 while the folder the user asked for stayed empty.
     """
 
-    def ui(self, *answers, argv=()):
-        said, calls, printed = list(answers), [], []
+    def ui(self, *answers, argv=(), source="1"):
+        said = ([] if source is None else [source]) + list(answers)   # the opening menu
+        calls, printed = [], []
 
         def ask(prompt):
             printed.append(prompt)
@@ -225,8 +232,9 @@ class ChoiceIsNotFooledByOddDigits(unittest.TestCase):
 class FirstRunAndTheOrderOfQuestions(AppCase):
     """What a new user sees, and when they are asked about a 50 MB download."""
 
-    def ui(self, *answers, argv=(), bare=False):
-        said, calls, printed = list(answers), [], []
+    def ui(self, *answers, argv=(), bare=False, source="1"):
+        said = ([] if source is None else [source]) + list(answers)   # the opening menu
+        calls, printed = [], []
 
         def ask(prompt):
             printed.append(prompt)

@@ -168,15 +168,19 @@ class ImportingALinkThroughRunPy(AppCase):
     """--import <link> writes a playlist file and stops there: downloading is a separate yes."""
 
     def ui(self, argv, reader, answers=()):
-        said, printed = list(answers), []
+        said, printed, self.calls = list(answers), [], []
 
         def ask(prompt):
             printed.append(prompt)
             return said.pop(0) if said else ""
 
+        def engine(args):
+            self.calls.append(list(args))
+            return 0
+
         with mock.patch.object(run, "APP_DIR", self.tmp):
-            code = run.main(list(argv), ask=ask, out=printed.append,
-                            engine=lambda args: 0, reader=reader)
+            code = run.main(list(argv), ask=ask, out=printed.append, engine=engine,
+                            reader=reader)
         return code, "\n".join(printed)
 
     def reader(self, page=None):
@@ -227,3 +231,88 @@ class ImportingALinkThroughRunPy(AppCase):
         self.assertIn("yt-dlp", text)
         self.assertIn("Download it?", text)
         self.assertIn("setup.py --all", text)
+
+
+class TheOpeningMenu(ImportingALinkThroughRunPy):
+    """Either drop a file in and download it, or paste a link and have it all happen."""
+
+    def test_a_bare_run_offers_the_three_ways_in(self):
+        self.playlist("A - One | 1:00\n")
+        code, text = self.ui([], self.reader())
+        self.assertEqual(code, 0)
+        for expected in ("Where from?", "1  download a playlist from a .txt file",
+                         "2  save a .txt from a Spotify link", "3  save a .txt from a SoundCloud"):
+            self.assertIn(expected, text)
+
+    def test_enter_at_the_menu_quits_without_doing_anything(self):
+        self.playlist("A - One | 1:00\n")
+        code, text = self.ui([], self.reader(), answers=[""])
+        self.assertEqual((code, self.calls), (0, []))
+        self.assertNotIn("Playlists:", text)
+
+    def test_option_one_leads_to_the_playlist_chooser(self):
+        self.playlist("A - One | 1:00\n", name="mix")
+        code, text = self.ui([], self.reader(), answers=["1", ""])
+        self.assertEqual(code, 0)
+        self.assertIn("Playlists:", text)
+        self.assertIn("mix", text)
+
+    def test_a_wrong_answer_asks_again_instead_of_guessing(self):
+        self.playlist("A - One | 1:00\n")
+        code, text = self.ui([], self.reader(), answers=["7", "x", ""])
+        self.assertEqual(code, 0)
+        self.assertIn("Type 1, 2 or 3", text)
+
+    def test_a_spotify_link_is_saved_and_then_downloaded(self):
+        # the whole point: paste a link, and the download happens in the same run
+        code, text = self.ui([], self.reader(), answers=["2", SPOTIFY_URL, "y"])
+        self.assertEqual(code, 0)
+        self.assertTrue((self.tmp / "Playlists" / "lo-fi-beats.txt").is_file())
+        self.assertIn("Missing:", text)
+        self.assertIn("Ashe - Stop The Wedding!", text)
+        self.assertEqual(self.calls, [["--only", "lo-fi-beats"]])
+
+    def test_the_download_still_needs_a_yes(self):
+        code, text = self.ui([], self.reader(), answers=["2", SPOTIFY_URL, "n"])
+        self.assertEqual((code, self.calls), (0, []))
+        self.assertIn("Skipped.", text)
+        self.assertTrue((self.tmp / "Playlists" / "lo-fi-beats.txt").is_file())
+
+    def test_a_link_works_with_no_playlists_on_disk_at_all(self):
+        # "no playlist .txt files" used to be a dead end before anything could be pasted
+        for leftover in (self.tmp / "Playlists").glob("*.txt"):
+            leftover.unlink()
+        code, text = self.ui([], self.reader(), answers=["2", SPOTIFY_URL, "n"])
+        self.assertEqual(code, 0)
+        self.assertNotIn("No playlist .txt files", text)
+
+    def test_enter_instead_of_a_link_cancels(self):
+        code, text = self.ui([], self.reader(), answers=["2", ""])
+        self.assertEqual((code, self.calls), (0, []))
+
+    def test_rubbish_instead_of_a_link_is_said_plainly(self):
+        code, text = self.ui([], self.reader(), answers=["2", "my playlist"])
+        self.assertEqual((code, self.calls), (2, []))
+        self.assertIn("Not a link this tool can read", text)
+
+    def test_an_existing_file_can_be_kept_and_downloaded_as_it_is(self):
+        self.playlist("Keep This | 1:00\n", name="lo-fi-beats")
+        code, text = self.ui([], self.reader(), answers=["2", SPOTIFY_URL, "k", "y"])
+        self.assertEqual(code, 0)
+        self.assertIn("Keep This",
+                      (self.tmp / "Playlists" / "lo-fi-beats.txt").read_text("utf-8"))
+        self.assertEqual(self.calls, [["--only", "lo-fi-beats"]])
+
+    def test_an_existing_file_can_be_replaced_from_the_link(self):
+        self.playlist("Keep This | 1:00\n", name="lo-fi-beats")
+        code, _ = self.ui([], self.reader(), answers=["2", SPOTIFY_URL, "r", "n"])
+        self.assertEqual(code, 0)
+        self.assertNotIn("Keep This",
+                         (self.tmp / "Playlists" / "lo-fi-beats.txt").read_text("utf-8"))
+
+    def test_a_scripted_run_never_sees_the_menu(self):
+        # --only, --yes and --import are how a scheduled run works: no questions at all
+        self.playlist("A - One | 1:00\n", name="mix")
+        for argv in (["--only", "mix", "--yes"], ["--import", SPOTIFY_URL]):
+            code, text = self.ui(argv, self.reader())
+            self.assertNotIn("Where from?", text, argv)
