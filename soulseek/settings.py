@@ -12,7 +12,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-APP_DIR = Path(__file__).resolve().parent.parent
+def _app_dir() -> Path:
+    """The folder that holds config.yaml, the binaries, Playlists/ and output/.
+
+    For a frozen build (PyInstaller) that is the folder of the executable, not the temporary
+    one the bundle is unpacked into - otherwise every run would look at a different place.
+    """
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
+APP_DIR = _app_dir()
 
 CONFIG_NAME = "config.yaml"
 LEGACY_CONFIG_NAME = "soulseek_batch.ini"  # read once on upgrade, then renamed to *.migrated
@@ -78,10 +89,14 @@ def parse_yaml(text: str) -> dict:
     values: dict[str, str] = {}
     for line in text.splitlines():
         line = line.split("#", 1)[0].rstrip()
-        if not line.strip() or ":" not in line:
+        if not line.strip():
             continue
-        key, _, value = line.partition(":")
-        key, value = key.strip(), value.strip().strip("\"'")
+        # split on the first ": ", not the first ":", or a value like a URL or C:\music
+        # would lose everything after its own colon
+        head, sep, value = line.partition(": ")
+        if not sep:
+            head, value = line.rstrip(":"), ""
+        key, value = head.strip(), value.strip().strip("\"'")
         if key and value:  # a section header has no value
             values[key] = value
     return values

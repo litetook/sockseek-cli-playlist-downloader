@@ -1,0 +1,32 @@
+sockseek.version: 3.0.5
+sockseek.url: https://github.com/fiso64/sockseek/releases/download/v{version}/{asset}
+sockseek.windows.asset: sockseek_{version}_win-x64.zip
+sockseek.windows.member: sockseek.exe
+sockseek.windows.sha256: 1b5c1189dcfc24cc9fea22dc67a58b7a5f0a127d0367355cf2a8718100044802
+sockseek.macos-arm64.asset: sockseek_{version}_osx-arm64.tar.gz
+sockseek.macos-arm64.member: sockseek
+sockseek.macos-arm64.sha256: 6a18078b78f98a9797d723925574996a7bf87f6cc3012aee9efa1e9977a0edd0
+sockseek.macos-x64.asset: sockseek_{version}_osx-x64.tar.gz
+sockseek.macos-x64.member: sockseek
+sockseek.macos-x64.sha256: dee6bbed20d2538dde7f4a854fc2ac400ad4a9adc5d75c2711aeecf37e7af1f5
+sockseek.linux-x64.asset: sockseek_{version}_linux-x64.tar.gz
+sockseek.linux-x64.member: sockseek
+sockseek.linux-x64.sha256: d0a1e909297bc4aa0e497bfdd7203884945a78adfb3c0477c8f22830ac951b66
+sockseek.linux-arm.asset: sockseek_{version}_linux-arm.tar.gz
+sockseek.linux-arm.member: sockseek
+sockseek.linux-arm.sha256: 4e2fe507afcf7c33c033ff2be32d501c61afe6e6f30f88dcaa287549abdf23fb
+
+yt-dlp.version: 2026.08.19
+yt-dlp.url: https://github.com/yt-dlp/yt-dlp/releases/download/{version}/{asset}
+yt-dlp.windows.asset: yt-dlp.exe
+yt-dlp.windows.sha256: 66674953fe251b89f4d08c5f0e35e0728679bd67ab3d7d05c0562af101dd3e7a
+yt-dlp.macos-arm64.asset: yt-dlp_macos
+yt-dlp.macos-arm64.sha256: 0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202
+yt-dlp.macos-x64.asset: yt-dlp_macos
+yt-dlp.macos-x64.sha256: 0f192b7ec147ab6288885d6351d9ab67367640029b4377576ef46dd79cf7b202
+yt-dlp.linux-x64.asset: yt-dlp
+yt-dlp.linux-x64.sha256: 1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6
+yt-dlp.linux-arm.asset: yt-dlp
+yt-dlp.linux-arm.sha256: 1fa6733c37ea6fb51c99ad8fe785e7b7e5f3246c9b980230329d4fb72ed8d4d6
+
+python.packages:

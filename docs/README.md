@@ -8,12 +8,15 @@ per playlist**, and reports what did not arrive and why.
 The one command is `py run.py`. Re-running the same playlist later is the normal workflow: what
 arrives depends on who is online right now, not on settings (section 8).
 
-Requirements: Python 3.10+ and a sockseek build for your system. Standard library only, nothing to `pip install`. Developed and measured on Windows; macOS is untested so far.
+Requirements: Python 3.10+. Standard library only, nothing to `pip install`. The external tools (sockseek, yt-dlp) are fetched at pinned versions by `py setup.py`, or on demand during a run. Developed and measured on Windows; macOS is untested so far.
 
 ## 0. What is where
 
 ```
 run.cmd / run.sh       launchers: find Python, hand over to run.py (Windows / macOS, Linux)
+build.cmd              one-file Windows build (PyInstaller), runs the tests first
+setup.py               installs the pinned external tools
+dependencies.yaml      the pins: version + sha256 per platform, per tool
 run.py                 the one command: menu, status, confirmation, --import
 soulseek/
     settings.py        config.yaml, the folders, the tunable numbers, sockseek.conf lookups
@@ -25,6 +28,7 @@ soulseek/
     quality.py         the optional ffprobe report
     batch.py           the run itself
     cli.py             the engine's command line
+    deps.py            the pinned tools: resolve, download, verify, install
 tests/                 one test module per component, plus support.py
 config.yaml            this tool's settings (section 5)
 sockseek.conf          every sockseek option, no secrets - publishable (section 7)
@@ -633,7 +637,7 @@ py -m unittest discover -v
 py -m unittest tests.test_importing      rem one component
 ```
 
-213 tests, about 15 seconds.
+238 tests, about 15 seconds.
 
 One test module per component (`tests/test_playlist.py`, `test_runner.py`, `test_index.py`,
 `test_settings.py`, `test_batch.py`, `test_explain.py`, `test_quality.py`, `test_importing.py`,

@@ -20,8 +20,13 @@ Standard library only.
 """
 from __future__ import annotations
 
+__version__ = "0.1.0"
+
 from .batch import Batch, Result, RunConfig, next_run_number, run_batch, run_label, SEQ_NAME
 from .cli import describe_config, main, options_from_args, parse_args
+from .deps import (DEPENDENCIES_NAME, Tool, ensure as ensure_tool,
+                   ensure_python_packages, install as install_tool, platform_key,
+                   status as tool_status, tools)
 from .explain import (Candidate, EXPLAIN_TIMEOUT_S, explain_failure, explain_failures,
                       parse_preview)
 from .importing import Imported, Importer, import_file

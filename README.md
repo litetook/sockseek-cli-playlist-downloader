@@ -78,16 +78,33 @@ The Python shipped with macOS may be old; the installer above puts a current one
 `/usr/local/bin/python3` and does not touch the system one. Nothing else to install: this tool
 uses the standard library only.
 
-### 2. sockseek
+### 2. The external tools — one command
 
-The Soulseek client this tool drives. Download the build for your system from
-[sockseek releases](https://github.com/fiso64/sockseek/releases) and put it next to `run.py`:
-`sockseek.exe` on Windows, `sockseek` on macOS or Linux — the tool accepts either name, so one
-config works on both. It is around 110 MB, which is why it is not in this repository (and would
-not fit GitHub's 100 MB per-file limit anyway).
+```
+py setup.py
+```
 
-On macOS you may need `chmod +x sockseek` and, the first time, **System Settings → Privacy &
-Security → Open Anyway**, because the binary is not notarised by Apple.
+That downloads the tools this one drives, at the versions pinned in
+[`dependencies.yaml`](dependencies.yaml), verifies the **sha256 of every file before it is put
+in place**, and leaves them next to `run.py`. Nothing is installed system-wide, nothing needs
+administrator rights.
+
+| Tool | Pinned | What for |
+|---|---|---|
+| [sockseek](https://github.com/fiso64/sockseek) | 3.0.5 | the Soulseek client: searching and downloading (~50 MB) |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 2026.08.19 | reading SoundCloud playlists (~17 MB) |
+
+```
+py setup.py --check      what is installed, and which versions
+py setup.py --upgrade    re-pin dependencies.yaml to the newest releases, then install
+```
+
+**Running it is optional.** A run that needs a tool it cannot find offers to fetch exactly that
+one and then carries on, so it makes no difference whether you ran setup first. Already have the
+binaries? Then nothing is downloaded and nothing changes.
+
+On macOS the tools are made executable automatically; the first launch may still need
+**System Settings → Privacy & Security → Open Anyway**, because they are not notarised by Apple.
 
 > A macOS build of sockseek exists, but this tool has **not been run on macOS yet**: it was
 > developed and measured on Windows. The Python side has nothing Windows-specific in it, so it
@@ -125,10 +142,24 @@ file from an export — see [Importing a list](#importing-a-list).
 run.cmd                 Windows: double-click it, or run it from a terminal
 ./run.sh                macOS / Linux
 py run.py               the same thing, if you prefer calling Python yourself
+py run.py --version     which version this is
 ```
 
 Both scripts only find Python and hand over to `run.py`; they take the same options. Skip the
 menu with `--only my-playlist`, and the confirmation too with `--yes`.
+
+### Or build one .exe (Windows)
+
+```
+py -m pip install pyinstaller
+build.cmd
+```
+
+`dist\sockseek-cli.exe` is then the whole program, Python not required. It runs the tests first
+and refuses to build if they fail. The external tools are still fetched at their pinned versions
+into the folder the exe sits in — `dependencies.yaml` is baked in as a fallback, so a lone exe
+still knows what to download. `config.yaml`, `sockseek.conf`, `Playlists/` and `output/` are read
+from that same folder, so the exe can be dropped into an existing install and just work.
 
 Downloads land flat in `output/<playlist>/`, named `Artist - Title.ext`.
 
@@ -334,6 +365,9 @@ mismatch is reported — a report only, nothing on disk is touched.
 
 ```
 run.cmd / run.sh       launchers for Windows and macOS/Linux
+build.cmd              builds dist\sockseek-cli.exe (Windows)
+setup.py               installs the pinned external tools
+dependencies.yaml      the pins: version + sha256 per platform, per tool
 Playlists/            your lists, one .txt per playlist
 output/<playlist>/     the audio, flat, plus sockseek's _index.csv
 work/                  generated list files and the merged sockseek config
@@ -341,6 +375,8 @@ logs/                  run_<NNNN>_<time>.log per run, run_seq.txt holds the last
 soulseek/              the engine, one module per component
 tests/                 one test module per component
 docs/README.md         the detailed manual: every option, every trap, with evidence
+TASK.md                the development log (Ukrainian): what was measured, and what was wrong
+REAL-RUN.md            the protocol of every real run against live Soulseek
 ```
 
 ## Tests
@@ -349,7 +385,7 @@ docs/README.md         the detailed manual: every option, every trap, with evide
 py -m unittest discover
 ```
 
-213 tests, about 15 seconds, no network. The ones that need sockseek use the real binary in
+238 tests, about 15 seconds, no network. The ones that need sockseek use the real binary in
 `--mock-files-dir` mode (no login, no network) and skip themselves if it is absent; the ffprobe
 ones skip without ffmpeg. **Never point a test at the real server** — one stray run can earn a
 30-minute ban.
@@ -367,5 +403,4 @@ ones skip without ffmpeg. **Never point a test at the real server** — one stra
 
 ---
 
-MIT licensed — see [LICENSE](LICENSE). Not affiliated with Soulseek or sockseek. Use it for
-music you are allowed to have.
+Not affiliated with Soulseek or sockseek. Use it for music you are allowed to have.

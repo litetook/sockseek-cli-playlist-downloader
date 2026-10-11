@@ -4,8 +4,20 @@ __pycache__/
 # the Soulseek login and any local override of sockseek.conf
 sockseek.local.conf
 
-# 109 MB, over GitHub's 100 MB limit: download it from the sockseek releases page
+# the pinned external tools: fetched by setup.py or on demand (dependencies.yaml)
 sockseek.exe
+sockseek
+yt-dlp.exe
+yt-dlp
+yt-dlp_macos
+
+# Python packages pinned in dependencies.yaml land here, if there ever are any
+vendor/
+
+# PyInstaller output
+build/
+dist/
+*.spec
 
 # downloads, run logs, generated list files
 output/

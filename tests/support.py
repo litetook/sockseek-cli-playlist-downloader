@@ -103,6 +103,9 @@ class AppCase(unittest.TestCase):
         # to start, which is its own test in test_settings
         (self.tmp / sb.SOCKSEEK_LOCAL_CONF).write_text(
             "username = test-login\npassword = test-password\n", encoding="utf-8")
+        # a binary has to exist, or run.py's on-demand check would try to DOWNLOAD sockseek
+        # (50 MB) in the middle of the suite - which is exactly what it did once
+        (self.tmp / ("sockseek.exe" if sys.platform == "win32" else "sockseek")).write_bytes(b"")
 
     def playlist(self, text, name="mix"):
         (self.playlists / f"{name}.txt").write_text(text, encoding="utf-8")

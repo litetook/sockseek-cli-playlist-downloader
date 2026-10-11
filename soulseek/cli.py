@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from . import settings
+from . import __version__, settings
 from .batch import run_batch
 from .runner import Options
 from .settings import PATH_KEYS, SETTINGS, Setting, check_value, config_paths, load_config
@@ -23,6 +23,7 @@ def parse_args(argv: list[str], config: Optional[dict] = None) -> argparse.Names
     config key plus `sources` (key -> 'cli' | 'config' | 'default'). Bad values exit with 2."""
     p = argparse.ArgumentParser(
         description="Batch-download playlists via sockseek: one process per playlist, flat output.")
+    p.add_argument("--version", action="version", version=f"sockseek-cli {__version__}")
     p.add_argument("--playlists", type=Path, help="folder with playlist .txt files (config: paths.playlists)")
     p.add_argument("--output", type=Path, help="export folder (config: paths.output)")
     p.add_argument("--sockseek", type=Path, help="path to sockseek.exe (config: paths.sockseek)")
@@ -93,7 +94,8 @@ def parse_args(argv: list[str], config: Optional[dict] = None) -> argparse.Names
 
 def describe_config(args: argparse.Namespace) -> list[str]:
     """Effective configuration, one key per line: name = value [source]."""
-    lines = ["effective configuration (key = value [source: cli | config | default]):"]
+    lines = [f"effective configuration of sockseek-cli {__version__} "
+             f"(key = value [source: cli | config | default]):"]
     for attr, key in (("playlists", "playlists_dir"), ("output", "output_dir"),
                       ("sockseek", "sockseek_exe"), ("config", "config_file"),
                       ("ffprobe", "ffprobe_path")):

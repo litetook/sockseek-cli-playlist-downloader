@@ -13,8 +13,12 @@ Options of this front end:
     --import <file>   turn an exported list (m3u/m3u8/csv/tsv/txt) into a playlist and exit
     --as <name>       name for the imported playlist (default: the file's own name)
     --overwrite       let --import replace a playlist that already exists
+    --version         print the version and exit
 Anything else is passed straight through to the engine, e.g. --length-tol 60, --verbose,
 --ffprobe-check, --no-explain, --dry-run.
+
+A tool it needs but cannot find (sockseek, and later yt-dlp) is offered for download at the
+version pinned in dependencies.yaml, so it makes no difference whether setup.py was run first.
 """
 from __future__ import annotations
 
@@ -148,6 +152,34 @@ def _import(source: Path, playlists_dir: Path, name: Optional[str], overwrite: b
     return 0
 
 
+def _have_sockseek(config: dict, ask: Optional[Callable[[str], str]],
+                   out: Callable[[str], None]) -> bool:
+    """Make sure sockseek is there before the first download is promised.
+
+    A configured path that exists is left alone; only a missing binary triggers the offer to
+    fetch the pinned version (dependencies.yaml) into the tool's own folder.
+    """
+    configured = soulseek.config_paths(config, APP_DIR)["sockseek"]
+    if configured.is_file():
+        return True
+
+    def confirm(question: str) -> bool:
+        if ask is None:
+            return True  # --yes: a scheduled run must not stop on a question
+        try:
+            return ask(f"{question} [y] yes  [n] no: ").strip().lower() in ("y", "yes")
+        except (EOFError, KeyboardInterrupt):
+            return False
+
+    out(f"sockseek is not at {configured}")
+    found = soulseek.ensure_tool("sockseek", out, config=soulseek.deps.load(),
+                                 app_dir=APP_DIR, ask=confirm)
+    if found is None:
+        out("Without sockseek nothing can be downloaded. See the README, or run: py setup.py")
+        return False
+    return True
+
+
 def main(argv: Optional[list[str]] = None,
          ask: Callable[[str], str] = input,
          out: Callable[[str], None] = print,
@@ -160,10 +192,14 @@ def main(argv: Optional[list[str]] = None,
     parser.add_argument("--import", dest="import_file", type=Path)
     parser.add_argument("--as", dest="import_name")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--version", action="store_true")
     parser.add_argument("-h", "--help", action="store_true")
     args, extra = parser.parse_known_args(argv)
     if args.help:
         out(__doc__.strip())
+        return 0
+    if args.version:
+        out(f"sockseek-cli {soulseek.__version__}")
         return 0
 
     config = soulseek.load_config(APP_DIR / soulseek.CONFIG_NAME, warn=out)
@@ -203,6 +239,8 @@ def main(argv: Optional[list[str]] = None,
             chosen = [infos[n] for n in picked]
             break
 
+    if not _have_sockseek(config, ask if not args.yes else None, out):
+        return 2
     worst = 0
     for info in chosen:
         out("")
