@@ -61,24 +61,9 @@ def platform_key() -> str:
     return "linux-arm" if arm else "linux-x64"
 
 
-def bundled(name: str) -> Optional[Path]:
-    """The copy inside a frozen build (PyInstaller unpacks data into sys._MEIPASS)."""
-    base = getattr(sys, "_MEIPASS", None)
-    return Path(base) / name if base else None
-
-
 def load(path: Optional[Path] = None) -> dict:
-    """dependencies.yaml as flat dotted keys (`sockseek.windows.sha256`).
-
-    A file next to the tool wins, so the pins can be edited without rebuilding; the copy
-    baked into a frozen build is the fallback, so a single downloaded .exe still knows what
-    to fetch.
-    """
+    """dependencies.yaml as flat dotted keys (`sockseek.windows.sha256`)."""
     path = path or settings.APP_DIR / DEPENDENCIES_NAME
-    if not path.is_file():
-        inside = bundled(DEPENDENCIES_NAME)
-        if inside and inside.is_file():
-            path = inside
     try:
         return settings.parse_yaml(path.read_text(encoding="utf-8-sig"))
     except (OSError, UnicodeDecodeError):
@@ -264,8 +249,7 @@ def ensure_python_packages(config: Optional[dict] = None, app_dir: Optional[Path
                           log: Callable[[str], None] = print) -> bool:
     """Install the pinned Python packages into vendor/ and put it on sys.path.
 
-    vendor/ instead of the system or a venv: nothing outside this folder is touched, and a
-    frozen build keeps working because vendor/ sits next to the executable.
+    vendor/ instead of the system or a venv: nothing outside this folder is touched.
     """
     config = load() if config is None else config
     wanted = python_packages(config)

@@ -12,18 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-def _app_dir() -> Path:
-    """The folder that holds config.yaml, the binaries, Playlists/ and output/.
-
-    For a frozen build (PyInstaller) that is the folder of the executable, not the temporary
-    one the bundle is unpacked into - otherwise every run would look at a different place.
-    """
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent.parent
-
-
-APP_DIR = _app_dir()
+# The folder that holds config.yaml, the binaries, Playlists/ and output/: one level above
+# this package, i.e. where run.py sits.
+APP_DIR = Path(__file__).resolve().parent.parent
 
 CONFIG_NAME = "config.yaml"
 LEGACY_CONFIG_NAME = "soulseek_batch.ini"  # read once on upgrade, then renamed to *.migrated
@@ -327,13 +318,7 @@ def effective_conf(app_dir: Path, work_dir: Path,
             warn(f"WARN cannot read {path.name}: {exc}")
             return ""
 
-    base = app_dir / SOCKSEEK_CONF
-    if not base.is_file():  # a frozen build carries a copy of the published conf inside it
-        from . import deps
-        inside = deps.bundled(SOCKSEEK_CONF)
-        if inside is not None and inside.is_file():
-            base = inside
-    merged = text_of(base)
+    merged = text_of(app_dir / SOCKSEEK_CONF)
     for layer in (local_path, extra):
         merged = merge_conf(merged, text_of(layer))
     target = work_dir / SOCKSEEK_EFFECTIVE_CONF

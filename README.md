@@ -149,19 +149,6 @@ py run.py --version     which version this is
 Both scripts only find Python and hand over to `run.py`; they take the same options. Skip the
 menu with `--only my-playlist`, and the confirmation too with `--yes`.
 
-### Or build one .exe (Windows)
-
-```
-py -m pip install pyinstaller
-build.cmd
-```
-
-`dist\sockseek-cli.exe` is then the whole program, Python not required. It runs the tests first
-and refuses to build if they fail. The external tools are still fetched at their pinned versions
-into the folder the exe sits in — `dependencies.yaml` is baked in as a fallback, so a lone exe
-still knows what to download. `config.yaml`, `sockseek.conf`, `Playlists/` and `output/` are read
-from that same folder, so the exe can be dropped into an existing install and just work.
-
 Downloads land flat in `output/<playlist>/`, named `Artist - Title.ext`.
 
 ---
@@ -366,7 +353,6 @@ mismatch is reported — a report only, nothing on disk is touched.
 
 ```
 run.cmd / run.sh       launchers for Windows and macOS/Linux
-build.cmd              builds dist\sockseek-cli.exe (Windows)
 setup.py               installs the pinned external tools
 dependencies.yaml      the pins: version + sha256 per platform, per tool
 Playlists/            your lists, one .txt per playlist

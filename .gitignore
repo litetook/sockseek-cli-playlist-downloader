@@ -14,11 +14,6 @@ yt-dlp_macos
 # Python packages pinned in dependencies.yaml land here, if there ever are any
 vendor/
 
-# PyInstaller output
-build/
-dist/
-*.spec
-
 # downloads, run logs, generated list files
 output/
 logs/

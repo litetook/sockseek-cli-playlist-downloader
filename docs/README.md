@@ -14,7 +14,6 @@ Requirements: Python 3.10+. Standard library only, nothing to `pip install`. The
 
 ```
 run.cmd / run.sh       launchers: find Python, hand over to run.py (Windows / macOS, Linux)
-build.cmd              one-file Windows build (PyInstaller), runs the tests first
 setup.py               installs the pinned external tools
 dependencies.yaml      the pins: version + sha256 per platform, per tool
 run.py                 the one command: menu, status, confirmation, --import

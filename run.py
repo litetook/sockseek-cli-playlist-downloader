@@ -30,9 +30,7 @@ from typing import Callable, Optional
 
 import soulseek
 
-# the engine owns this, and it knows about frozen builds - where this script's __file__ points
-# into the temporary unpack folder, not to where the exe, the playlists and the output live
-APP_DIR = soulseek.APP_DIR
+APP_DIR = soulseek.APP_DIR  # one folder for everything, decided by the engine
 
 
 @dataclass(frozen=True)
