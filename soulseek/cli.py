@@ -136,3 +136,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         config_report=tuple(describe_config(args)), early_messages=tuple(messages),
         ffprobe=args.ffprobe,
     )
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -123,7 +123,7 @@ py run.py                              rem THE command: pick, see what is missin
 py run.py --only my-playlist           rem skip the menu (file stem, no .txt)
 py run.py --only my-playlist --yes     rem skip the confirmation too (scheduled runs)
 py run.py --only my-playlist --dry-run rem print the sockseek command, run nothing
-py -m soulseek.cli --help              rem the engine options; run.py passes them through
+py -m soulseek --help                  rem the engine options; run.py passes them through
 ```
 
 Nothing is downloaded until the second yes:
