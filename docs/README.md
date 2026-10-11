@@ -72,6 +72,48 @@ is safe to share or copy between machines. The keys `output-dir`, `length-tol`, 
 deliberately not in it either: the script passes those on every run, so a value in the conf
 would be dead.
 
+## 1a. Importing a list
+
+`--import` fills a playlist file in and stops there; downloading stays the separate confirmed
+step. A file and a link go through the same flag.
+
+```bash
+py run.py --import "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+py run.py --import "https://soundcloud.com/bonobo/sets/outlier-radio-on-nts" --as outlier
+py run.py --import exported.csv --as techno-2026 --overwrite
+```
+
+**Spotify** is read from `https://open.spotify.com/embed/playlist/<id>`, whose HTML carries the
+track list as JSON under `props.pageProps.state.data.entity.trackList`: `title`, `subtitle`
+(the artist) and `duration` in milliseconds. That route needs no account, no API key, no
+developer application and no Premium - which matters, because sockseek's own Spotify support
+needs all four (`sockseek --help input`: "requires your own Spotify developer application for
+all Spotify inputs, including public playlists ... an active Spotify Premium subscription").
+
+Measured 2026-10-12: *Today's Top Hits* returned 50 tracks (its real length), while *Rock
+Classics* and *All Out 2000s* both returned exactly 100. A ceiling of 100, in other words, so
+an import that comes back with exactly 100 prints a warning. ⚠ Not proven: that those two
+playlists are in fact longer than 100 - only that two different ones stopped at the same round
+number. A playlist that is not public has no embed page and is reported as such.
+
+**SoundCloud** is not one of sockseek's input types (`--input-type` lists csv, youtube, spotify,
+bandcamp, string, list, soulseek, musicbrainz), so `yt-dlp` reads it - fetched on demand at the
+version pinned in `dependencies.yaml` when the first SoundCloud link arrives.
+
+`--flat-playlist` is **not** used: measured 2026-10-12 on a public set, it returns entries whose
+title and duration are both `NA`. Resolving each track costs about a second and gives real
+metadata, so that is what runs:
+
+```
+yt-dlp --no-warnings --ignore-errors --skip-download
+       --print "%(playlist_title)s<US>%(title)s<US>%(uploader)s<US>%(duration)s" URL
+```
+
+A SoundCloud title is often already `Artist - Title`, in which case it is kept as it is;
+otherwise the uploader is prefixed, which is a guess - an uploader is not always the artist,
+and sockseek has `--artist-maybe-wrong` for exactly that case. A private set needs
+`--cookies-from-browser <browser>`: the login happens in the browser, nothing is typed here.
+
 ## 2. Playlist format
 
 One `.txt` file per playlist in `Playlists/`. The file name (without `.txt`) is the playlist name

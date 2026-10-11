@@ -9,6 +9,7 @@ Modules:
     settings    config.yaml, the folders, the tunable numbers, sockseek.conf lookups
     playlist    playlist files -> entries
     importing   an exported list (m3u/csv/text) -> a playlist file
+    links       a Spotify or SoundCloud playlist link -> a playlist file
     index       sockseek's _index.csv: what is already on disk, what failed and why
     runner      building and running the sockseek command
     explain     the extra conditionless search that explains every failure
@@ -20,7 +21,7 @@ Standard library only.
 """
 from __future__ import annotations
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 from .batch import Batch, Result, RunConfig, next_run_number, run_batch, run_label, SEQ_NAME
 from .cli import describe_config, main, options_from_args, parse_args
@@ -29,7 +30,8 @@ from .deps import (DEPENDENCIES_NAME, Tool, ensure as ensure_tool, optional as t
                    status as tool_status, tools)
 from .explain import (Candidate, EXPLAIN_TIMEOUT_S, explain_failure, explain_failures,
                       parse_preview)
-from .importing import Imported, Importer, import_file
+from .importing import (Imported, Importer, import_file, track_line, write_playlist)
+from .links import (EMBED_MAX, LinkError, LinkReader, Linked, detect, is_link, slug)
 from .index import (INDEX_NAME, INDEX_OK, REASON_TEXT, Status, failure_dict, failure_rows,
                     find_index_files, format_failure, match_index, playlist_status, read_index,
                     read_index_with_dirs, rows_by_entry)

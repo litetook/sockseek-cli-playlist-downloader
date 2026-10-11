@@ -22,6 +22,7 @@ ARTIST_COLUMNS = ("artist name(s)", "artist", "artists", "artist name", "album a
 LENGTH_COLUMNS = ("duration (ms)", "duration_ms", "duration", "time", "length", "track duration")
 
 EXTINF = "#EXTINF:"
+NEWLINE = chr(10)
 
 
 IMPLAUSIBLE_SECONDS = 4 * 3600  # a single track four hours long: the number must be millis
@@ -50,7 +51,7 @@ def _seconds(text: str, column: str = "", guess_ms: bool = False) -> Optional[in
     return int(number + 0.5)
 
 
-def _line(name: str, length: Optional[int]) -> str:
+def track_line(name: str, length: Optional[int]) -> str:
     """One playlist line: `Name | m:ss`, or just the name when the length is unknown."""
     name = " ".join(name.split())
     if length is None:
@@ -104,7 +105,7 @@ class Importer:
                 warnings.append(f"skipped an entry without a title: {raw!r}")
                 continue
             length = _seconds(seconds)
-            lines.append(_line(name, length if length and length > 0 else None))
+            lines.append(track_line(name, length if length and length > 0 else None))
         if not lines:
             warnings.append("no #EXTINF entries found - is this really an m3u playlist?")
         return Imported(lines, warnings, "m3u")
@@ -137,7 +138,7 @@ class Importer:
             length = (_seconds(row.get(length_col) or "", length_col or "", guess_ms=True)
                       if length_col else None)
             name = f"{artist} - {title}" if artist else title
-            lines.append(_line(name, length))
+            lines.append(track_line(name, length))
         return Imported(lines, warnings, "table")
 
     def from_text(self, text: str) -> Imported:
@@ -174,10 +175,23 @@ def import_file(source: Path, playlists_dir: Path, name: Optional[str] = None,
     found = Importer().read(source)
     if not found.lines:
         return None, found
-    target = playlists_dir / f"{name or source.stem}.txt"
+    written, refused = write_playlist(found.lines, playlists_dir, name or source.stem,
+                                      overwrite)
+    if written is None:
+        return None, Imported(found.lines, found.warnings + [refused or ""], found.source)
+    return written, found
+
+
+def write_playlist(lines: list[str], playlists_dir: Path, name: str,
+                   overwrite: bool = False) -> tuple[Optional[Path], Optional[str]]:
+    """Write `<playlists_dir>/<name>.txt`. Returns (path, None), or (None, why not).
+
+    A playlist is hand-edited, so an existing one is never replaced without --overwrite.
+    """
+    target = playlists_dir / f"{(name or 'playlist').strip()}.txt"
     if target.exists() and not overwrite:
-        return None, Imported(found.lines, found.warnings + [f"{target.name} already exists"],
-                              found.source)
+        return None, f"{target.name} already exists"
     playlists_dir.mkdir(parents=True, exist_ok=True)
-    target.write_text(found.text(), encoding="utf-8", newline="\n")
-    return target, found
+    text = NEWLINE.join(lines) + NEWLINE if lines else ""
+    target.write_text(text, encoding="utf-8", newline=NEWLINE)
+    return target, None

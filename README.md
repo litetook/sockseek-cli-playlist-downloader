@@ -301,11 +301,33 @@ after the playlist is chosen and the download confirmed.
 
 ## Importing a list
 
+A playlist file is the tool's own interface, and `--import` fills one in - from a file another
+program exported, or from a link. Either way it only writes the file and stops: the downloading
+is the separate, confirmed step, so an import never costs you anything.
+
 ```bash
+py run.py --import "https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+py run.py --import "https://soundcloud.com/bonobo/sets/outlier-radio-on-nts"
 py run.py --import "C:\exports\my set.m3u8"
-py run.py --import tracks.csv --as techno-2026
 py run.py --import tracks.csv --as techno-2026 --overwrite
 ```
+
+### From a link
+
+| Service | What it needs | Limit |
+|---|---|---|
+| Spotify playlist or album | nothing - no account, no API key, no developer application, no Premium | the page it reads gives **at most 100 tracks**, and the playlist must be public |
+| SoundCloud set | `yt-dlp`, offered for download the moment you pass such a link | a private set needs `--cookies-from-browser chrome` (you are logged in there, not here) |
+
+The playlist's own name becomes the file name (`Today's Top Hits` -> `todays-top-hits.txt`), or
+pass `--as`. When Spotify returns exactly 100 tracks the import says so, because a longer
+playlist is cut there and nothing else would tell you.
+
+Spotify is read from its embed page, which carries the track list as JSON; SoundCloud has no
+such page, and sockseek has no SoundCloud input either, so `yt-dlp` reads that one. Beatport is
+not supported: it is partner-gated and blocks automated browsers.
+
+### From a file
 
 | Format | Where the length comes from |
 |---|---|
@@ -316,8 +338,6 @@ py run.py --import tracks.csv --as techno-2026 --overwrite
 The title column is looked up among `Track Name`, `title`, `name`, `track`, `song`; the artist
 among `Artist Name(s)`, `artist`, `artists`, `album artist`. Anything skipped is named in a
 `WARN` line. An existing playlist is not replaced without `--overwrite`.
-
-Importing from a link (Spotify, SoundCloud, Beatport) is not implemented.
 
 ---
 
@@ -332,9 +352,11 @@ run.py            you  ←  menu, status, "download these 4?"
            ├─ runner.py     the sockseek command and the process around it
            ├─ explain.py    why a track did not arrive
            ├─ quality.py    optional ffprobe report
+           ├─ links.py      a playlist link read without an account
            └─ deps.py       the pinned tools: resolve, download, verify, install
 settings.py       config.yaml and sockseek.conf
 importing.py      m3u / csv / plain text  ->  a playlist file
+links.py          a Spotify or SoundCloud link  ->  a playlist file
 ```
 
 **1. Read the list.** `Daft Punk - Around the World | 7:09` becomes a search string and a length

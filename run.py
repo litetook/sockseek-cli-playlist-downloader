@@ -10,9 +10,13 @@ now (proven 2026-10-07: a track absent on the 6th arrived on the 7th as flac 893
 Options of this front end:
     --only <name>     skip the menu and take that playlist (file stem, no .txt)
     --yes             skip the confirmation (for a scheduled run)
-    --import <file>   turn an exported list (m3u/m3u8/csv/tsv/txt) into a playlist and exit
-    --as <name>       name for the imported playlist (default: the file's own name)
+    --import <what>   turn an exported list (m3u/m3u8/csv/tsv/txt) or a playlist link
+                      (Spotify, SoundCloud) into a playlist file and exit
+    --as <name>       name for the imported playlist (default: its name at the source)
     --overwrite       let --import replace a playlist that already exists
+    --cookies-from-browser <browser>
+                      read a private SoundCloud set with the browser's own login
+                      (chrome, firefox, edge, brave, ...) - you log in there, not here
     --version         print the version and exit
 Anything else is passed straight through to the engine, e.g. --length-tol 60, --verbose,
 --ffprobe-check, --no-explain, --dry-run.
@@ -131,6 +135,54 @@ def _confirm(ask: Callable[[str], str], count: int) -> bool:
             return False
 
 
+def _import_link(url: str, playlists_dir: Path, name: Optional[str], overwrite: bool,
+                 out: Callable[[str], None], config: dict, cookies_from: Optional[str],
+                 ask: Optional[Callable[[str], str]],
+                 reader: Optional[soulseek.LinkReader] = None) -> int:
+    """--import <link>: write a playlist from a Spotify or SoundCloud link.
+
+    Only the track list is taken. The downloading stays with the engine, so a link ends up in
+    the same place a hand-written list does: a file you can read, edit and re-run.
+    """
+    tool = None
+    if soulseek.detect(url) == "soundcloud":
+        # sockseek has no SoundCloud input type, so this one needs yt-dlp - fetched on demand,
+        # and only after the person agreed to the download
+        # deps.load() reads dependencies.yaml: `config` here is config.yaml and knows
+        # nothing about pinned tools
+        tool = soulseek.ensure_tool("yt-dlp", out, config=soulseek.deps.load(), app_dir=APP_DIR,
+                                    ask=None if ask is None else
+                                    lambda question: _yes(ask, question))
+        if tool is None:
+            out("Without yt-dlp a SoundCloud link cannot be read. Run: py setup.py --all")
+            return 2
+    out(f"Reading {url}")
+    linked = (reader or soulseek.LinkReader()).read(url, tool, cookies_from)
+    for warning in linked.warnings:
+        out(f"WARN {warning}")
+    if not linked.lines:
+        out("Nothing imported.")
+        return 2
+    stem = name or soulseek.slug(linked.name) or "playlist"
+    written, refused = soulseek.write_playlist(linked.lines, playlists_dir, stem, overwrite)
+    if written is None:
+        out(f"Nothing written: {refused}. Pass --overwrite to replace it.")
+        return 2
+    with_length = sum(1 for line in linked.lines if "|" in line)
+    out(f"{written.name}: {len(linked.lines)} track(s) from {linked.source}"
+        f"{f' ({linked.name})' if linked.name else ''}, {with_length} with a length.")
+    out(f"Now run: py run.py --only {written.stem}")
+    return 0
+
+
+def _yes(ask: Callable[[str], str], question: str) -> bool:
+    """A yes/no question for the tool downloads, with the same answers as the main one."""
+    try:
+        return ask(f"{question} [y] yes  [n] no: ").strip().lower() in ("y", "yes")
+    except (EOFError, KeyboardInterrupt):
+        return False
+
+
 def _import(source: Path, playlists_dir: Path, name: Optional[str], overwrite: bool,
             out: Callable[[str], None]) -> int:
     """--import: write a playlist from an exported list and report what happened."""
@@ -183,13 +235,15 @@ def _have_sockseek(config: dict, ask: Optional[Callable[[str], str]],
 def main(argv: Optional[list[str]] = None,
          ask: Callable[[str], str] = input,
          out: Callable[[str], None] = print,
-         engine: Callable[[list[str]], int] = soulseek.main) -> int:
+         engine: Callable[[list[str]], int] = soulseek.main,
+         reader: Optional[soulseek.LinkReader] = None) -> int:
     """Pick, show, confirm, download. Returns the worst exit code of the runs it started."""
     argv = sys.argv[1:] if argv is None else argv
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--only")
     parser.add_argument("--yes", action="store_true")
-    parser.add_argument("--import", dest="import_file", type=Path)
+    parser.add_argument("--import", dest="import_source")
+    parser.add_argument("--cookies-from-browser", dest="cookies_from")
     parser.add_argument("--as", dest="import_name")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--version", action="store_true")
@@ -224,8 +278,12 @@ def main(argv: Optional[list[str]] = None,
     playlists_dir = args.playlists or folders["playlists"]
     output_dir = args.output or folders["output"]
 
-    if args.import_file is not None:
-        return _import(args.import_file, playlists_dir, args.import_name, args.overwrite, out)
+    if args.import_source is not None:
+        if soulseek.is_link(args.import_source):
+            return _import_link(args.import_source, playlists_dir, args.import_name,
+                                args.overwrite, out, config, args.cookies_from, ask, reader)
+        return _import(Path(args.import_source), playlists_dir, args.import_name,
+                       args.overwrite, out)
 
     infos = scan(playlists_dir, output_dir)
     if not infos:
