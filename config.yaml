@@ -1,0 +1,9 @@
+paths:
+  sockseek: sockseek.exe
+  playlists: Playlists
+  output: output
+
+search:
+  length_tol_s: 45
+  retries: 1
+  playlist_timeout_min: 10

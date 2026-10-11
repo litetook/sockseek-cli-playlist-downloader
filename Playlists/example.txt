@@ -1,0 +1,7 @@
+# One track per line. The part after | is the length: m:ss, h:mm:ss or plain seconds.
+# A line without a length still works, just without the protection against another version.
+# Lines starting with # are ignored. The file name (without .txt) is the playlist name and
+# becomes the output folder name.
+Daft Punk - Around the World | 7:09
+Fatboy Slim - Praise You | 5:23
+Royksopp - Eple | 3:40

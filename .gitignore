@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+
+# the Soulseek login and any local override of sockseek.conf
+sockseek.local.conf
+
+# 109 MB, over GitHub's 100 MB limit: download it from the sockseek releases page
+sockseek.exe
+
+# downloads, run logs, generated list files
+output/
+logs/
+work/
+
+# your own playlists stay yours
+Playlists/*
+!Playlists/example.txt
