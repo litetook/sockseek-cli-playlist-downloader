@@ -33,28 +33,35 @@ config.yaml            this tool's settings (section 5)
 sockseek.conf          every sockseek option, no secrets - publishable (section 7)
 sockseek.local.conf    your Soulseek login and any override of the above - git-ignored
 README.md              the project page: purpose, quick start, how it works
-TASK.md                the development log in Ukrainian: measurements, traps, what is unproven
 Playlists/ output/ work/ logs/   input, downloads, generated list files, run logs
-docs/history/          finished plans and handovers, kept for the record
 ```
 
 ## 1. Install
 
-1. Download `sockseek.exe` from <https://github.com/fiso64/sockseek/releases> and put it in the
-   same folder as `run.py` (or point to it with `paths.sockseek` in `config.yaml`).
-2. Put your Soulseek login into **`sockseek.local.conf`** (the first run creates it from a
-   placeholder template):
+1. **Python 3.10+**, nothing to `pip install`.
+2. **The external tools come from `py setup.py`**, at the versions pinned in
+   `dependencies.yaml`, with the sha256 of every file verified before it is put in place
+   (`py setup.py --check` lists them). Running setup is optional: a run that needs a tool it cannot find offers to
+   fetch exactly that one, after you have chosen a playlist and confirmed the download.
+   Nothing is installed system-wide and nothing needs administrator rights.
+3. **The first run creates the three config files and stops**, because nothing can be
+   downloaded before it knows who you are:
 
    ```
-   username = your_login
-   password = your_password
+   WARN created config.yaml from the built-in template
+   WARN created sockseek.conf from the built-in template
+   WARN created sockseek.local.conf: put your Soulseek login there
+
+   Put your Soulseek login in ...\sockseek.local.conf:
+       username = your-soulseek-login
+       password = your-soulseek-password
+   Then run this again. Nothing can be downloaded until then.
    ```
 
-   That file is the only one that holds secrets, it is git-ignored, and nothing in the logs ever
-   prints its values. It also overrides any other key of `sockseek.conf` (section 7), which is
-   what a setup script would write into it. Without a login the run stops with a message instead
-   of failing inside sockseek.
-3. Put playlist files into `Playlists/` (next section).
+   `sockseek.local.conf` is the only file that holds secrets, it is git-ignored, and nothing in
+   the logs ever prints its values. It also overrides any other key of `sockseek.conf`
+   (section 7), which is what a setup script would write into it.
+4. Put playlist files into `Playlists/` (next section), or generate one with `--import`.
 
 `sockseek.conf` holds every quality and waiting knob (section 7) and **no credentials**, so it
 can be published. The keys `output-dir`, `length-tol`, `name-format` and `index-path` are
@@ -144,8 +151,8 @@ File names alone cannot be used for this: they come from the uploader
 `run.cmd` is a thin shim around `py run.py`; it pauses at the end only when double-clicked.
 
 **Exit code `1` means this tool failed, not that a track is unavailable.** A track nobody shares
-is news about Soulseek, and on a playlist of SoundCloud edits it is the normal case; it is
-reported in the log and in the missing list, and the run still ends with `0`.
+is news about Soulseek, and on a playlist of SoundCloud edits it is the normal case; every
+such track is named in the log with the reason, and the run still ends with `0`.
 
 | Code | Meaning |
 |---|---|
@@ -178,12 +185,12 @@ The length check (section 9) never changes the exit code, and neither does a mis
 Every run ends with one summary line:
 
 ```
-15 of 30 track(s) downloaded, 15 missing (run #0002)
+15 of 30 track(s) in the folders, 15 still missing (run #0002)
 ```
 
-Tracks already in a playlist's `_index.csv` are skipped by sockseek (`--skip-mode-output-dir index`
-is its default), so re-running only retries what is missing. The missing lines are also written
-out as a playlist of their own (section 8), so the next run can be just that.
+A track already on disk is not even sent to sockseek: the tool works out what is missing first
+(section 8) and searches only that, so re-running the same playlist is the normal way to pick up
+the rest.
 
 ## 4. Where files land
 
@@ -332,7 +339,7 @@ a broken value gives `Option '--max-stale-time' requires an integer`, an unknown
 The file carries no comments and no login; this section explains the keys.
 
 ```
-max-stale-time = 300000
+max-stale-time = 30000
 
 min-bitrate = 256
 pref-min-bitrate = 320
@@ -615,20 +622,7 @@ actually used, two were outside the window (the second only by 2 s).
 broadcast a bitrate. So the script never adds `--min-bitrate` to the sockseek command, and the
 bit rate in the `CHECK` lines is information only.
 
-## 10. Migrating old output
-
-Older versions ran one process per track and left audio scattered in `output/<name>/NNN.list/`.
-`tools/flatten_output.py` moves those files up into `output/<name>/`. It is a one-time tool:
-
-```
-py tools/flatten_output.py            rem dry run (default): only prints what would move
-py tools/flatten_output.py --apply    rem really move
-```
-
-It only moves audio files, leaves every `_index.csv` where it is, and never overwrites an
-existing file (it reports the clash and exits with `1`).
-
-## 11. Tests
+## 10. Tests
 
 ```
 py -m unittest discover
@@ -639,8 +633,8 @@ py -m unittest tests.test_importing      rem one component
 238 tests, about 15 seconds.
 
 One test module per component (`tests/test_playlist.py`, `test_runner.py`, `test_index.py`,
-`test_settings.py`, `test_batch.py`, `test_explain.py`, `test_quality.py`, `test_importing.py`,
-`test_ui.py`), with the shared fixtures in `tests/support.py`.
+`test_settings.py`, `test_batch.py`, `test_explain.py`, `test_quality.py`, `test_deps.py`,
+`test_importing.py`, `test_ui.py`), with the shared fixtures in `tests/support.py`.
 
 Tests that need sockseek use the real `sockseek.exe` with `--mock-files-dir` and `--no-config`:
 no login, no network. They are skipped if `sockseek.exe` is missing. The ffprobe cases also need

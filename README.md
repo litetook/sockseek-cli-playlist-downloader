@@ -3,6 +3,11 @@
 Give it a list of tracks. It tells you which ones you already have, which ones are missing, and
 downloads only the missing ones from Soulseek — after you say yes.
 
+[Soulseek](https://www.slsknet.org) is a peer-to-peer network where people share music folders
+from their own machines: there is no server holding the files, so **a track exists for you only
+while the person who has it is online.** That single fact is why this tool is shaped the way it
+is, and why running the same list again tomorrow is normal rather than a workaround.
+
 ```
 Playlists:
 
@@ -24,6 +29,10 @@ Missing:
 Download these 4? [y] yes  [n] no: y
 ```
 
+**What it costs to try:** a Soulseek account (free, made in any Soulseek client), Python 3.10+,
+and about 50 MB of pinned tools it downloads for you. The network runs on people leaving their
+client open, so share something back.
+
 Python 3.10+, standard library only — nothing to `pip install`. Developed and measured on
 Windows; macOS and Linux should work but are untested (see [Install](#install)). It drives
 [sockseek](https://github.com/fiso64/sockseek) — a console Soulseek client — and adds the part
@@ -33,27 +42,27 @@ sockseek has no opinion about: what to ask for, what you already have, and what 
 
 ## Why it exists
 
-A playlist of 30 tracks is a boring, repetitive job: search each name, check it is the right
-version, check the quality, keep track of what failed, come back later for the rest. The
-official Soulseek client is a window with a mouse — it cannot take a list.
-
-And the coming-back-later part is not optional. **Soulseek is other people's computers.** A
-file exists for you only while the person sharing it is online, so the same list gives different
-results at different hours. Measured on this repo's own runs: a track that was nowhere on the 6th
-arrived on the 7th as a 893 kbps flac, with nothing changed in the code. On a fresh 10-track list
-the first run brought 6, a run 30 seconds later brought 2 more, a third brought the last 2.
+The official Soulseek client is a window with a mouse — it cannot take a list. And because a
+file is only there while its owner is online, one pass over a playlist is never the whole story.
+Measured on this repository's own runs: a track that was nowhere on **2026-10-06** arrived on
+**2026-10-07** as a 893 kbps flac, with nothing changed in the code. On a fresh 10-track list the
+first run brought 6, a run 30 seconds later brought 2 more, a third brought the last 2.
 
 So the tool is built around repetition rather than around clever searching:
 
-| The job | How it is handled |
-|---|---|
-| What do I already have? | Decided before anything else, from sockseek's index **and** the files on disk |
-| What should be searched? | Only what is missing — the rest is not even sent to sockseek |
-| Did I get the right version? | A length window, plus the fact that Soulseek requires every word of the query in the file path |
-| Why did this one fail? | One extra conditionless search per failure, which separates "nobody shares it" from "our conditions rejected it" from "the uploader did not deliver" |
-| Can I just run it again? | That is the normal workflow. Same command, same list — it searches only the leftovers |
+- **What do I already have?** Decided before anything else, from sockseek's index **and** the
+  files on disk.
+- **What should be searched?** Only what is missing — the rest is not even sent to sockseek.
+- **Did I get the right version?** A length window, plus the fact that Soulseek requires every
+  word of the query to appear in the file path.
+- **Why did this one fail?** One extra conditionless search per failure, which separates "nobody
+  shares it" from "our conditions rejected it" from "the uploader did not deliver".
+- **Can I just run it again?** That is the normal workflow: same command, same list, and it
+  searches only the leftovers.
 
-Nothing is ever overwritten or deleted. A file already on disk is never re-downloaded.
+Nothing you downloaded is ever overwritten or deleted, and a file already on disk is never
+fetched again. (The one thing the tool does rename is an `soulseek_batch.ini` left over from an
+older version, into `*.ini.migrated`, after carrying its values into `config.yaml`.)
 
 ---
 
@@ -68,16 +77,9 @@ py --version        (Windows)
 python3 --version   (macOS, Linux)
 ```
 
-If not:
-
-| | Download | Official instructions |
-|---|---|---|
-| **Windows** | [python.org/downloads/windows](https://www.python.org/downloads/windows/) | [Using Python on Windows](https://docs.python.org/3/using/windows.html) — in the installer **tick "Add python.exe to PATH"**, that is the step people skip |
-| **macOS** | [python.org/downloads/macos](https://www.python.org/downloads/macos/) | [Using Python on macOS](https://docs.python.org/3/using/mac.html) — or `brew install python` if you have [Homebrew](https://brew.sh) |
-
-The Python shipped with macOS may be old; the installer above puts a current one in
-`/usr/local/bin/python3` and does not touch the system one. Nothing else to install: this tool
-uses the standard library only.
+If not: [python.org/downloads](https://www.python.org/downloads/) — on Windows, **tick "Add
+python.exe to PATH"** in the installer, which is the step people skip. Nothing else to install:
+this tool uses the standard library only.
 
 ### 2. The external tools — one command
 
@@ -183,7 +185,8 @@ run.py            you  ←  menu, status, "download these 4?"        starts noth
            ├─ index.py      WHAT IS ALREADY HERE, and what failed
            ├─ runner.py     the sockseek command and the process around it
            ├─ explain.py    why a track did not arrive
-           └─ quality.py    optional ffprobe report
+           ├─ quality.py    optional ffprobe report
+           └─ deps.py       the pinned tools: resolve, download, verify, install
 settings.py       two config files: this tool's config.yaml and sockseek.conf
 importing.py      m3u / csv / plain text  ->  a playlist file
 ```
@@ -222,9 +225,17 @@ run #0029: 2 arrived, 2 still missing, 8 of 10 in the folder
 passed the conditions**, not that the track is absent. That is exactly why the extra
 conditionless search exists.
 
-**Exit codes:** `0` — the run worked (tracks may still be missing, that is Soulseek, not a bug);
-`1` — the tool itself failed; `2` — setup problem (no login, no sockseek, unknown playlist name);
-`130` — Ctrl+C.
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | the run worked. Tracks may still be missing — that is Soulseek, not a bug |
+| `1` | the tool itself failed: sockseek could not start, was killed by the timeout, or exited with an error and wrote no index |
+| `2` | setup problem: no login yet, no sockseek, an unknown playlist name, a config file that does not exist |
+| `130` | Ctrl+C |
+
+A non-zero exit from sockseek on its own is **not** a failure of the tool: it returns one
+whenever a single track fails, which is the everyday case.
 
 ---
 
@@ -250,11 +261,18 @@ A relative path is relative to the folder holding `run.py`; an absolute one (`ou
 is taken as it is. Command line beats the file, and every run log starts with the effective
 values and where each came from (`cli`, `config`, `default`).
 
-- `length_tol_s` — the length window in seconds, a **hard** condition; `-1` turns it off.
-  45 because playlist lengths run systematically shorter than the copies people share (measured:
-  319 s in the list, 346 s on the network, same remix).
-- `retries` — attempts per playlist. More than one doubles the wall clock for little gain.
-- `playlist_timeout_min` — wall clock per attempt; a real 30-track run takes about 6 minutes.
+- `length_tol_s` (`--length-tol`) — the length window in seconds, a **hard** condition; `-1`
+  turns it off. 45 because playlist lengths run systematically shorter than the copies people
+  share (measured: 319 s in the list, 346 s on the network, same remix).
+- `retries` (`--retries`) — attempts per playlist. More than one doubles the wall clock for
+  little gain.
+- `playlist_timeout_min` (`--playlist-timeout`) — wall clock per attempt; a real 30-track run
+  takes about 6 minutes.
+- the folders have flags too: `--playlists`, `--output`, `--sockseek`, and `--config` for the
+  settings file itself.
+
+The values above are the ones in the shipped `config.yaml`. The built-in defaults, used when a
+key is absent, are `retries: 2` and `playlist_timeout_min: 40`.
 
 ### `sockseek.conf` — quality, waiting, search behaviour
 
@@ -360,12 +378,15 @@ py run.py --only <name> --verbose           keep sockseek's own log in logs/
 py run.py --only <name> --ffprobe-check     measure the downloaded files and report mismatches
 py run.py --only <name> --sockseek-conf other.conf          one more config layer, this run
 py run.py --only <name> --sockseek-args="--desperate"      pass anything through to sockseek
-py -m soulseek.cli --help                   every engine option
+py -m soulseek.cli --help                   the engine's own options
+py run.py --help                            and the ones run.py adds: --only, --yes,
+                                            --import, --as, --overwrite, --version
 ```
 
 `--ffprobe-check` is off by default: the tool does not inspect the contents of what you
 downloaded unless you ask. With it, every file is measured with ffprobe and a length or bitrate
-mismatch is reported — a report only, nothing on disk is touched.
+mismatch is reported — a report only, nothing on disk is touched. ffprobe is **not** one of the
+pinned tools, so it has to be on `PATH` already (part of ffmpeg) or named with `--ffprobe PATH`.
 
 ---
 
@@ -384,6 +405,8 @@ tests/                 one test module per component
 docs/README.md         the detailed manual: every option, every trap, with evidence
 ```
 
+---
+
 ## Tests
 
 ```
@@ -394,6 +417,8 @@ py -m unittest discover
 `--mock-files-dir` mode (no login, no network) and skip themselves if it is absent; the ffprobe
 ones skip without ffmpeg. **Never point a test at the real server** — one stray run can earn a
 30-minute ban.
+
+---
 
 ## What it does not do
 
@@ -408,4 +433,7 @@ ones skip without ffmpeg. **Never point a test at the real server** — one stra
 
 ---
 
-Not affiliated with Soulseek or sockseek. Use it for music you are allowed to have.
+## License
+
+MIT — see [LICENSE](LICENSE). Not affiliated with Soulseek or sockseek. Use it for music you
+are allowed to have.
