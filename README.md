@@ -38,6 +38,36 @@ Windows; macOS and Linux should work but are untested (see [Install](#install)).
 [sockseek](https://github.com/fiso64/sockseek) — a console Soulseek client — and adds the part
 sockseek has no opinion about: what to ask for, what you already have, and what happened.
 
+## Written entirely with AI — read this before you rely on it
+
+Every line here — the 2 500 lines of code, the 275 tests and this documentation — was written by
+an AI assistant (Claude), directed and reviewed by the repository owner. **No second human has
+reviewed this code.** Treat that as the main risk of using it, and judge it the way you would
+judge any young tool: by what has actually been checked.
+
+What has been checked:
+
+- **275 tests**, offline, run on every change.
+- **34 numbered runs against the live Soulseek network**, with their logs kept. The numbers in
+  this README (15 of 30, 10 of 10, 25 of 25, the 319 s vs 346 s length gap) come from those runs,
+  not from expectation.
+- Two **independent AI reviews** of the code and of this document; what they found is fixed, and
+  what could not be confirmed is labelled as unproven in the detailed manual.
+
+What that does **not** cover, and where it will cost you time:
+
+- One machine, one Soulseek account, a handful of playlists, a few days. Behaviour on a large
+  library, a slow connection or another operating system is untested.
+- Anything outside the tests has not been thought through by a human. When this tool meets a
+  case nobody considered, expect it to stop and say something, not to do the clever thing.
+- The parts the author of the code could not verify are named as such rather than guessed — in
+  particular the unit of `fast-search-min-up-speed`, and whether a wider length window ever
+  brings a track that the uploader will actually deliver.
+
+What the design does to limit the damage: **nothing you downloaded is ever overwritten or
+deleted**, no track is downloaded twice, and the tool asks before it fetches anything. The
+likely failure mode is a run that reports it did nothing — not a folder of corrupted music.
+
 ---
 
 ## Why it exists

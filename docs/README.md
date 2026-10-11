@@ -8,6 +8,10 @@ per playlist**, and reports what did not arrive and why.
 The one command is `py run.py`. Re-running the same playlist later is the normal workflow: what
 arrives depends on who is online right now, not on settings (section 8).
 
+Written entirely by an AI assistant (Claude), directed by the repository owner, with no second
+human reviewer: see the risk note in `README.md` before relying on it. What has been measured is
+in this file, dated, including the hypotheses that turned out to be wrong.
+
 Requirements: Python 3.10+. Standard library only, nothing to `pip install`. The external tools (sockseek, yt-dlp) are fetched at pinned versions by `py setup.py`, or on demand during a run. Developed and measured on Windows; macOS is untested so far.
 
 ## 0. What is where
