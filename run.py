@@ -30,7 +30,9 @@ from typing import Callable, Optional
 
 import soulseek
 
-APP_DIR = Path(__file__).resolve().parent
+# the engine owns this, and it knows about frozen builds - where this script's __file__ points
+# into the temporary unpack folder, not to where the exe, the playlists and the output live
+APP_DIR = soulseek.APP_DIR
 
 
 @dataclass(frozen=True)
@@ -97,8 +99,8 @@ def parse_choice(text: str, count: int) -> Optional[list[int]]:
     for part in text.replace(" ", ",").split(","):
         if not part:
             continue
-        if not part.isdigit():
-            return None
+        if not (part.isascii() and part.isdecimal()):
+            return None  # "2".isdigit() is true for superscripts too, and int() rejects those
         number = int(part)
         if not 1 <= number <= count:
             return None
@@ -194,7 +196,16 @@ def main(argv: Optional[list[str]] = None,
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--version", action="store_true")
     parser.add_argument("-h", "--help", action="store_true")
+    # the three path options are read HERE as well, not merely passed on: the menu and the
+    # "here / missing" counts have to look at the folders the engine will actually use
+    parser.add_argument("--playlists", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--config", type=Path)
     args, extra = parser.parse_known_args(argv)
+    for flag, value in (("--playlists", args.playlists), ("--output", args.output),
+                        ("--config", args.config)):
+        if value is not None:
+            extra += [flag, str(value)]
     if args.help:
         out(__doc__.strip())
         return 0
@@ -202,9 +213,10 @@ def main(argv: Optional[list[str]] = None,
         out(f"sockseek-cli {soulseek.__version__}")
         return 0
 
-    config = soulseek.load_config(APP_DIR / soulseek.CONFIG_NAME, warn=out)
+    config = soulseek.load_config(args.config or APP_DIR / soulseek.CONFIG_NAME, warn=out)
     folders = soulseek.config_paths(config, APP_DIR)
-    playlists_dir, output_dir = folders["playlists"], folders["output"]
+    playlists_dir = args.playlists or folders["playlists"]
+    output_dir = args.output or folders["output"]
 
     if args.import_file is not None:
         return _import(args.import_file, playlists_dir, args.import_name, args.overwrite, out)
@@ -256,7 +268,11 @@ def main(argv: Optional[list[str]] = None,
             out("Skipped.")
             continue
         out("")
-        worst = max(worst, engine(["--only", info.name] + extra))
+        code = engine(["--only", info.name] + extra)
+        worst = max(worst, code)
+        if code == 130:  # Ctrl+C means stop the session, not "skip to the next playlist"
+            out("Interrupted.")
+            break
     return worst
 
 

@@ -24,7 +24,8 @@ Missing:
 Download these 4? [y] yes  [n] no: y
 ```
 
-Python 3.13, standard library only, Windows. It drives
+Python 3.10+, standard library only — nothing to `pip install`. Developed and measured on
+Windows; macOS and Linux should work but are untested (see [Install](#install)). It drives
 [sockseek](https://github.com/fiso64/sockseek) — a console Soulseek client — and adds the part
 sockseek has no opinion about: what to ask for, what you already have, and what happened.
 
@@ -92,7 +93,7 @@ administrator rights.
 | Tool | Pinned | What for |
 |---|---|---|
 | [sockseek](https://github.com/fiso64/sockseek) | 3.0.5 | the Soulseek client: searching and downloading (~50 MB) |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 2026.08.19 | reading SoundCloud playlists (~17 MB) |
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | 2026.08.19 | **not used yet** — pinned for reading SoundCloud playlists, which is not implemented; `setup.py` skips it unless you ask for `--all` (~17 MB) |
 
 ```
 py setup.py --check      what is installed, and which versions
@@ -375,8 +376,6 @@ logs/                  run_<NNNN>_<time>.log per run, run_seq.txt holds the last
 soulseek/              the engine, one module per component
 tests/                 one test module per component
 docs/README.md         the detailed manual: every option, every trap, with evidence
-TASK.md                the development log (Ukrainian): what was measured, and what was wrong
-REAL-RUN.md            the protocol of every real run against live Soulseek
 ```
 
 ## Tests

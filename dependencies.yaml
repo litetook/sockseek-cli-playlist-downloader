@@ -16,6 +16,7 @@ sockseek.linux-arm.asset: sockseek_{version}_linux-arm.tar.gz
 sockseek.linux-arm.member: sockseek
 sockseek.linux-arm.sha256: 4e2fe507afcf7c33c033ff2be32d501c61afe6e6f30f88dcaa287549abdf23fb
 
+yt-dlp.optional: true
 yt-dlp.version: 2026.08.19
 yt-dlp.url: https://github.com/yt-dlp/yt-dlp/releases/download/{version}/{asset}
 yt-dlp.windows.asset: yt-dlp.exe

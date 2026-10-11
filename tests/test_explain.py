@@ -107,3 +107,66 @@ class MinBitrateFromSockseekConf(unittest.TestCase):
         shipped = sb.APP_DIR / sb.SOCKSEEK_CONF
         if shipped.is_file():
             self.assertEqual(sb.read_min_bitrate(shipped), 256)
+
+
+class ExplainEndToEnd(AppCase):
+    """The explain step with explain=True, which nothing covered before.
+
+    `AppCase.batch()` passes explain=False everywhere else, so the wiring between the index,
+    the extra search and the printed reason was never exercised - and it was broken for a
+    track with no index row at all.
+    """
+
+    PREVIEW = ("Results for A - One (60s):\n\n"
+               "[200s/320kbps /1.0MB] p/q.mp3\nTotal: 1\n")
+
+    def setUp(self):
+        super().setUp()
+        self.exe = self.tmp / "dummy.exe"
+        self.exe.write_bytes(b"")
+
+    def run_with(self, rows, preview=None):
+        """A run where sockseek writes `rows` and the explain search answers `preview`."""
+        def fake(cmd, cwd, timeout_s, log):
+            out = Path(cmd[cmd.index("-o") + 1])
+            out.mkdir(parents=True, exist_ok=True)
+            if rows is not None:
+                (out / "_index.csv").write_text(INDEX_HEADER + rows, encoding="utf-8")
+            return sb.FAILED
+
+        done = subprocess.CompletedProcess([], 0, preview or self.PREVIEW, "")
+        with mock.patch.object(sb_runner, "run_process", fake), \
+             mock.patch.object(sb_explain.subprocess, "run", return_value=done):
+            # a real length window, or every explanation would read "length and quality are fine"
+            return self.batch(dry_run=False, sockseek=self.exe, retries=1, explain=True,
+                              opts=sb.Options(length_tol=3))
+
+    def test_a_track_with_an_index_row_gets_its_reason_explained(self):
+        self.playlist("A - One | 1:00\n")
+        self.assertEqual(self.run_with(",,,A - One,60,0,2,9\n"), 0)
+        text = " ".join(self.last_log_lines())
+        self.assertIn("IS on the network", text)
+        self.assertIn("rejected by length", text)
+        self.assertNotIn("not checked", text)
+
+    def test_a_track_with_no_index_row_is_explained_too(self):
+        # the lookup used to fall back to the playlist LINE ("A - One | 1:00"), which can
+        # never match "Results for A - One", so the log said "not checked" after the search
+        self.playlist("A - One | 1:00\n")
+        self.assertEqual(self.run_with(",,,Someone Else,99,0,2,9\n"), 0)
+        text = " ".join(self.last_log_lines())
+        self.assertIn("IS on the network", text)
+        self.assertNotIn("not checked", text)
+
+    def test_the_extra_search_is_announced_and_costs_one_query_per_failure(self):
+        self.playlist("A - One | 1:00\nB - Two | 2:00\n")
+        self.run_with(",,,A - One,60,0,2,9\n,,,B - Two,120,0,2,9\n")
+        self.assertIn("explaining 2 failure(s): 2 extra search(es), nothing is downloaded",
+                      self.last_log_lines())
+
+    def test_nothing_in_the_network_is_said_plainly_from_a_real_run(self):
+        self.playlist("A - One | 1:00\n")
+        self.assertEqual(self.run_with(",,,A - One,60,0,2,9\n",
+                                       preview="Results for A - One (60s):\n\nNo results\n"), 0)
+        self.assertIn("  -> nothing on the network: 0 candidates even with every condition off",
+                      self.last_log_lines())

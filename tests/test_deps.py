@@ -289,3 +289,31 @@ class ShippedDependencies(unittest.TestCase):
     def test_the_versions_are_plain_numbers(self):
         for name in deps.TOOL_NAMES:
             self.assertRegex(self.config[f"{name}.version"], r"^[\d.]+$", name)
+
+
+class NeverHalfABinary(unittest.TestCase):
+    """A failed unpack must leave nothing that later counts as installed."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = Path(self._tmp.name)
+        self.log: list[str] = []
+
+    def test_a_failed_extract_leaves_no_file_and_no_part_file(self):
+        payload = zipped("other.exe", b"x")
+        tool = deps.Tool(name="t", version="1", url="https://example.com/t.zip",
+                         sha256=hashlib.sha256(payload).hexdigest(),
+                         member="sockseek.exe", target=self.dir / "sockseek.exe")
+        with mock.patch.object(deps.urllib.request, "urlopen", served(payload)):
+            self.assertFalse(deps.install(tool, self.log.append))
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()), [])
+
+    def test_a_good_install_leaves_only_the_binary(self):
+        payload = zipped("sockseek.exe", b"real")
+        tool = deps.Tool(name="t", version="1", url="https://example.com/t.zip",
+                         sha256=hashlib.sha256(payload).hexdigest(),
+                         member="sockseek.exe", target=self.dir / "sockseek.exe")
+        with mock.patch.object(deps.urllib.request, "urlopen", served(payload)):
+            self.assertTrue(deps.install(tool, self.log.append))
+        self.assertEqual(sorted(p.name for p in self.dir.iterdir()), ["sockseek.exe"])

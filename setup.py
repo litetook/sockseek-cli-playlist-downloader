@@ -29,13 +29,13 @@ def report(config: dict) -> int:
         return 2
     width = max(len(tool.name) for tool, _ in rows)
     print(f"platform: {deps.platform_key()}")
+    marks = {"ok": "ok     ", "missing": "MISSING", "optional": "skipped"}
     for tool, state in rows:
-        mark = "ok     " if state == "ok" else "MISSING"
-        print(f"  {mark}  {tool.name.ljust(width)}  {tool.version}  {tool.target}")
+        print(f"  {marks[state]}  {tool.name.ljust(width)}  {tool.version}  {tool.target}")
     print(f"  python   {sys.version.split()[0]}")
     packages = deps.python_packages(config)
     print(f"  packages {', '.join(packages) if packages else 'none (standard library only)'}")
-    return 0 if all(state == "ok" for _, state in rows) else 1
+    return 0 if all(state in ("ok", "optional") for _, state in rows) else 1
 
 
 def latest(repo: str) -> Optional[dict]:
@@ -93,6 +93,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", action="store_true", help="only report, install nothing")
+    parser.add_argument("--all", action="store_true",
+                        help="install the optional tools too (pinned but not used yet)")
     parser.add_argument("--upgrade", action="store_true",
                         help="re-pin dependencies.yaml to the newest releases first")
     parser.add_argument("--dependencies", type=Path,
@@ -115,6 +117,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     for tool, state in rows:
         if state == "ok":
             print(f"ok       {tool.name} {tool.version} -> {tool.target}")
+            continue
+        if deps.optional(tool.name, config) and not args.all:
+            print(f"skipped  {tool.name} {tool.version} (optional, pass --all to install it)")
             continue
         if not deps.install(tool, print):
             failed += 1

@@ -142,3 +142,81 @@ class RunUi(AppCase):
         code, text, calls = self.ui()
         self.assertEqual((code, calls), (2, []))
         self.assertIn("No playlist .txt files", text)
+
+
+class PathFlagsAreNotOnlyPassedOn(AppCase):
+    """--output / --playlists / --config change what the MENU counts, not just the engine.
+
+    Before: the menu read config.yaml, saw the track in the default output folder, said
+    "Nothing to do" and exited 0 while the folder the user asked for stayed empty.
+    """
+
+    def ui(self, *answers, argv=()):
+        said, calls, printed = list(answers), [], []
+
+        def ask(prompt):
+            printed.append(prompt)
+            if not said:
+                raise EOFError
+            return said.pop(0)
+
+        with mock.patch.object(run, "APP_DIR", self.tmp):
+            code = run.main(list(argv), ask=ask, out=printed.append,
+                            engine=lambda args: calls.append(list(args)) or 0)
+        return code, "\n".join(printed), calls
+
+    def have_in(self, folder, line="A - One | 1:00", file="one.mp3"):
+        folder.mkdir(parents=True, exist_ok=True)
+        entries, _ = sb.convert_playlist(line + "\n")
+        (folder / file).write_bytes(b"x")
+        (folder / "_index.csv").write_text(
+            INDEX_HEADER + f"{file},,,{entries[0].track.title},{entries[0].track.length},0,1,0\n",
+            encoding="utf-8")
+
+    def test_another_output_folder_is_the_one_that_is_measured(self):
+        self.playlist("A - One | 1:00\n")
+        self.have_in(self.output / "mix")          # present in the DEFAULT folder
+        other = self.tmp / "elsewhere"
+        code, text, calls = self.ui("y", argv=["--only", "mix", "--output", str(other)])
+        self.assertIn("1 missing", text)           # the chosen folder has nothing
+        self.assertEqual(calls, [["--only", "mix", "--output", str(other)]])
+        self.assertEqual(code, 0)
+
+    def test_a_folder_that_already_has_it_is_seen_as_done(self):
+        self.playlist("A - One | 1:00\n")
+        other = self.tmp / "elsewhere"
+        self.have_in(other / "mix")
+        code, text, calls = self.ui(argv=["--only", "mix", "--output", str(other)])
+        self.assertIn("Nothing to do.", text)
+        self.assertEqual(calls, [])
+
+    def test_another_playlists_folder_is_listed(self):
+        self.playlist("A - One | 1:00\n")          # in the default folder
+        other = self.tmp / "other-lists"
+        other.mkdir()
+        (other / "second.txt").write_text("B - Two | 2:00\n", encoding="utf-8")
+        code, text, calls = self.ui("", argv=["--playlists", str(other)])
+        self.assertIn("second", text)
+        self.assertNotIn("mix", text)
+
+    def test_ctrl_c_in_the_engine_stops_the_session(self):
+        self.playlist("A - One | 1:00\n", name="a")
+        self.playlist("B - Two | 2:00\n", name="b")
+        calls, printed = [], []
+        with mock.patch.object(run, "APP_DIR", self.tmp):
+            code = run.main(["all", "--yes"] if False else ["--yes"],
+                            ask=lambda prompt: "all", out=printed.append,
+                            engine=lambda args: calls.append(list(args)) or 130)
+        self.assertEqual(calls, [["--only", "a"]])  # the second playlist is not started
+        self.assertEqual(code, 130)
+        self.assertIn("Interrupted.", "\n".join(printed))
+
+
+class ChoiceIsNotFooledByOddDigits(unittest.TestCase):
+    def test_a_superscript_digit_is_refused_not_crashed_on(self):
+        # "2".isdigit() is true for these, and int() then raises
+        for text in ("\u00b2", "\u00bd", "\u2075"):
+            self.assertIsNone(run.parse_choice(text, 3), text)
+
+    def test_plain_numbers_still_work(self):
+        self.assertEqual(run.parse_choice("2", 3), [1])

@@ -18,7 +18,7 @@ from .explain import explain_failure, explain_failures
 from .index import (INDEX_NAME, INDEX_OK, failure_dict, find_index_files, format_failure,
                     playlist_status, read_index_with_dirs, rows_by_entry)
 from .playlist import Entry, Playlist
-from .runner import Options, Sockseek, run_with_retry
+from .runner import ERROR, OK, Options, Sockseek, TIMEOUT, run_with_retry
 from .settings import (SOCKSEEK_CONF, SOCKSEEK_LOCAL_CONF, effective_conf,
                        missing_credentials, read_min_bitrate)
 
@@ -198,10 +198,16 @@ class Batch:
             log("dry run: " + subprocess.list2cmdline(cmd))
             return Result(total=len(entries), missing=len(before.missing))
         out_dir.mkdir(parents=True, exist_ok=True)
-        ok = run_with_retry(cmd, cfg.app_dir, client.timeout_s, cfg.retries, log)
+        status = run_with_retry(cmd, cfg.app_dir, client.timeout_s, cfg.retries, log)
         if cfg.opts.preview:
-            log("preview done" if ok else "FAILED")
-            return Result(total=len(entries), missing=len(before.missing), broke=not ok)
+            log("preview done" if status == OK else "FAILED")
+            return Result(total=len(entries), missing=len(before.missing),
+                          broke=status != OK)
+        if status == ERROR:
+            # the process never ran, so nothing is known about the network: saying a track is
+            # missing here would be the tool blaming Soulseek for its own failure
+            log("ERROR sockseek could not be started, nothing was searched")
+            return Result(total=len(entries), missing=len(before.missing), broke=True)
 
         index_files = find_index_files(out_dir)
         rows, row_dirs = read_index_with_dirs(index_files)
@@ -212,12 +218,17 @@ class Batch:
         still = [e for e in before.missing if e.original not in after.files]
         for entry in arrived:
             log(f"OK      {entry.original}")
-        broke = False
-        if still:
-            self.report(still, entries, rows, list_file, out_dir, client)
-        if not still and not ok:
-            log("ERROR sockseek reported errors but every missing track arrived")
+        # A non-zero exit is the EVERYDAY case: sockseek returns it whenever one track fails
+        # (run #0028 brought 6 of 10 and still exited 1). What marks a broken run is the
+        # process being killed, or exiting non-zero with no index and nothing to show.
+        broke = status == TIMEOUT and not arrived
+        if broke:
+            log("ERROR sockseek was killed by the timeout before anything arrived")
+        elif status != OK and not arrived and not index_files:
+            log("ERROR sockseek exited with an error and wrote no index: nothing was searched")
             broke = True
+        if still and not broke:
+            self.report(still, entries, rows, list_file, out_dir, client)
         log(f"run #{run_label(cfg.run_no)}: {len(arrived)} arrived, {len(still)} still missing, "
             f"{len(after.have)} of {len(entries)} in the folder")
         self.check_lengths(entries, rows, row_dirs)
@@ -232,15 +243,18 @@ class Batch:
         found = (explain_failures(failures, entries, list_file, client, out_dir, log)
                  if cfg.explain else {})
         min_bitrate = read_min_bitrate(cfg.conf or cfg.sockseek.parent / SOCKSEEK_CONF)
-        for failure in failures:
+        for entry, failure in zip(still, failures):
             if (failure["state"] or "").strip() in INDEX_OK:
                 log("WARN the index says this one arrived, but no file is on disk: "
                     f"{failure['playlist_line']}")
             log(format_failure(failure))
             if cfg.explain:
-                title = (failure["index_title"] or failure["playlist_line"]).strip()
-                for line in explain_failure(failure, found.get(title), cfg.opts.length_tol,
-                                            min_bitrate):
+                # the search string, which is what sockseek echoes as "Results for ...".
+                # It equals the index title when there is a row, but a track with NO row used
+                # to fall back to the playlist line with its " | 4:09" tail, and then nothing
+                # could ever match: the log said "not checked" after paying for the search.
+                for line in explain_failure(failure, found.get(entry.track.title),
+                                            cfg.opts.length_tol, min_bitrate):
                     log(line)
 
     def check_lengths(self, entries: list[Entry], rows: list[dict], dirs: list[Path]) -> None:

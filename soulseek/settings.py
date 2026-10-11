@@ -79,27 +79,42 @@ SETTINGS: tuple[Setting, ...] = (
 SETTING_BY_KEY = {s.key: s for s in SETTINGS}
 
 
-def parse_yaml(text: str) -> dict:
+def parse_yaml(text: str, warn: Optional[Callable[[str], None]] = None) -> dict:
     """Flat `key: value` pairs, section names ignored.
 
     Deliberately not a YAML implementation: the config is a list of names and values and the
     standard library has no YAML. Lists and deeper nesting are unsupported and surface as
-    unknown keys in load_config.
+    unknown keys in load_config. A line that looks like a setting but yields no pair is
+    reported through `warn` with its number: dropping one silently is how a setting goes
+    missing while the log still claims the default was chosen on purpose.
     """
     values: dict[str, str] = {}
-    for line in text.splitlines():
-        line = line.split("#", 1)[0].rstrip()
-        if not line.strip():
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
             continue
-        # split on the first ": ", not the first ":", or a value like a URL or C:\music
+        # split on the first ": ", not the first ":", or a value like a URL or a Windows path
         # would lose everything after its own colon
         head, sep, value = line.partition(": ")
         if not sep:
             head, value = line.rstrip(":"), ""
-        key, value = head.strip(), value.strip().strip("\"'")
-        if key and value:  # a section header has no value
+        key, value = head.strip(), _value(value)
+        if key and value:
             values[key] = value
+        elif (not key or not line.endswith(":")) and warn is not None:
+            warn(f"line {number} is not a 'key: value' pair, ignored: {line!r}")
     return values
+
+
+def _value(text: str) -> str:
+    """One scalar: quotes stripped, and a trailing `# comment` removed only OUTSIDE quotes."""
+    text = text.strip()
+    for quote in ('"', "'"):
+        if text.startswith(quote):
+            closing = text.find(quote, 1)
+            if closing > 0:
+                return text[1:closing]
+    return text.split("#", 1)[0].strip()
 
 
 def check_value(setting: Setting, value: object) -> Optional[str]:
@@ -124,7 +139,8 @@ def load_config(path: Path, warn: Optional[Callable[[str], None]] = None) -> dic
     if not path.exists():
         return _create(path, warn)
     try:
-        raw = parse_yaml(path.read_text(encoding="utf-8-sig"))
+        raw = parse_yaml(path.read_text(encoding="utf-8-sig"),
+                         lambda message: warn(f"WARN: {path.name}: {message}"))
     except (OSError, UnicodeDecodeError) as exc:
         warn(f"WARN: cannot read {path.name}: {exc}")
         return {}
@@ -249,12 +265,13 @@ def merge_conf(base: str, override: str) -> str:
     extra = parse_conf(override)
     used: set[str] = set()
     out: list[str] = []
-    tail = False
+    tail: list[str] = []  # from the first [profile] on: copied untouched, nothing inserted
     for raw in base.splitlines():
         line = raw.strip()
-        if line.startswith("["):
-            tail = True
-        if not tail and not line.startswith("#") and "=" in line:
+        if tail or line.startswith("["):
+            tail.append(raw)
+            continue
+        if not line.startswith("#") and "=" in line:
             key = line.partition("=")[0].strip()
             if key in extra:
                 out.append(f"{key} = {extra[key]}")
@@ -263,8 +280,11 @@ def merge_conf(base: str, override: str) -> str:
         out.append(raw)
     rest = [f"{key} = {value}" for key, value in extra.items() if key not in used]
     if rest:
+        # BEFORE the profiles, not after: a key appended past the first [section] would belong
+        # to that profile, and parse_conf (which stops at "[") would never see it again - that
+        # is how a correct sockseek.local.conf could read as "no login"
         out += ["", *rest]
-    return "\n".join(out).rstrip() + "\n"
+    return "\n".join(out + ([""] + tail if tail else [])).rstrip() + "\n"
 
 
 def missing_credentials(text: str) -> list[str]:
@@ -307,7 +327,13 @@ def effective_conf(app_dir: Path, work_dir: Path,
             warn(f"WARN cannot read {path.name}: {exc}")
             return ""
 
-    merged = text_of(app_dir / SOCKSEEK_CONF)
+    base = app_dir / SOCKSEEK_CONF
+    if not base.is_file():  # a frozen build carries a copy of the published conf inside it
+        from . import deps
+        inside = deps.bundled(SOCKSEEK_CONF)
+        if inside is not None and inside.is_file():
+            base = inside
+    merged = text_of(base)
     for layer in (local_path, extra):
         merged = merge_conf(merged, text_of(layer))
     target = work_dir / SOCKSEEK_EFFECTIVE_CONF

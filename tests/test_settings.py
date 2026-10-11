@@ -485,3 +485,57 @@ class CommandLineConfigLayer(AppCase):
         extra.write_text("pref-format = flac\n", encoding="utf-8")
         args, _ = parse_cli_args("--sockseek-conf", str(extra))
         self.assertIn(f"  sockseek_conf = {extra} [cli]", sb.describe_config(args))
+
+
+class ConfigParserDoesNotLoseValues(unittest.TestCase):
+    """What the parser drops, it says out loud; and a `#` inside quotes is part of the value."""
+
+    def test_a_line_without_a_space_after_the_colon_is_reported(self):
+        warnings: list[str] = []
+        self.assertEqual(sb.parse_yaml("retries:3\nlength_tol_s: 60\n", warnings.append),
+                         {"length_tol_s": "60"})
+        self.assertTrue(any("line 1" in w and "retries:3" in w for w in warnings), warnings)
+
+    def test_a_section_header_is_not_reported_as_a_problem(self):
+        warnings: list[str] = []
+        sb.parse_yaml("paths:\n  output: x\n", warnings.append)
+        self.assertEqual(warnings, [])
+
+    def test_a_comment_is_not_a_problem_either(self):
+        warnings: list[str] = []
+        sb.parse_yaml("# just a note\nretries: 2\n", warnings.append)
+        self.assertEqual(warnings, [])
+
+    def test_a_hash_inside_quotes_stays_in_the_value(self):
+        self.assertEqual(sb.parse_yaml('output: "D:/music#1"\n'), {"output": "D:/music#1"})
+        self.assertEqual(sb.parse_yaml("output: 'D:/music#1'\n"), {"output": "D:/music#1"})
+
+    def test_a_hash_outside_quotes_is_still_a_comment(self):
+        self.assertEqual(sb.parse_yaml("retries: 2  # two attempts\n"), {"retries": "2"})
+
+    def test_a_windows_path_keeps_its_drive_letter(self):
+        self.assertEqual(sb.parse_yaml("output: D:\\music\n"), {"output": "D:\\music"})
+
+    def test_the_run_log_names_the_line_it_could_not_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.yaml"
+            path.write_text("search:\n  retries:3\n", encoding="utf-8")
+            warnings: list[str] = []
+            sb.load_config(path, warn=warnings.append)
+        self.assertTrue(any("line 2" in w for w in warnings), warnings)
+
+
+class MergeKeepsTheLoginOutOfProfiles(unittest.TestCase):
+    """A new key must land BEFORE the first [profile], or it silently belongs to that profile."""
+
+    def test_the_login_is_inserted_above_a_profile_section(self):
+        base = "min-bitrate = 256\n\n[lossless]\nmin-bitrate = 900\n"
+        merged = sb.merge_conf(base, "username = u\npassword = p\n")
+        self.assertEqual(sb.missing_credentials(merged), [])     # parse_conf stops at "[",
+        self.assertEqual(sb.parse_conf(merged)["username"], "u")  # so this is the real check
+        self.assertLess(merged.index("username"), merged.index("[lossless]"))
+        self.assertIn("min-bitrate = 900", merged)                # the profile is untouched
+
+    def test_without_a_profile_nothing_changes_about_the_old_behaviour(self):
+        merged = sb.merge_conf("min-bitrate = 256\n", "username = u\n")
+        self.assertEqual(sb.parse_conf(merged), {"min-bitrate": "256", "username": "u"})

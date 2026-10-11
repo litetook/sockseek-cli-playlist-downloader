@@ -106,19 +106,25 @@ def run_process(cmd: list[str], cwd: Path, timeout_s: Optional[float],
 
 
 def run_with_retry(cmd: list[str], cwd: Path, timeout_s: Optional[float], retries: int,
-                   log: Callable[[str], None], pause_s: float = RETRY_PAUSE_S) -> bool:
-    """Run cmd up to `retries` times. A retry earns tracks: on run #0002 an uploader that
-    timed out on the first attempt delivered on the second."""
+                   log: Callable[[str], None], pause_s: float = RETRY_PAUSE_S) -> str:
+    """Run cmd up to `retries` times; returns the status of the last attempt.
+
+    The status, not a bool: sockseek exits non-zero whenever a single track fails, which is
+    the normal case, while "could not start" and "killed by the timeout" mean the tool itself
+    failed. Only the caller can tell those apart, so it gets the distinction.
+
+    A retry earns tracks: on run #0002 an uploader that timed out on the first attempt
+    delivered on the second.
+    """
+    status = ERROR
     for attempt in range(1, retries + 1):
         log(f"attempt {attempt}/{retries}")
         status = run_process(cmd, cwd, timeout_s, log)
-        if status == OK:
-            return True
-        if status == ERROR:
-            return False
+        if status in (OK, ERROR):
+            return status
         if attempt < retries:
             time.sleep(pause_s)
-    return False
+    return status
 
 
 @dataclass(frozen=True)
@@ -141,7 +147,7 @@ class Sockseek:
         return build_command(self.exe, list_file, out_dir, opts or self.opts, log_file,
                              self.extra_args, index_name, self.conf)
 
-    def run(self, cmd: list[str], log: Callable[[str], None]) -> bool:
+    def run(self, cmd: list[str], log: Callable[[str], None]) -> str:
         return run_with_retry(cmd, self.cwd, self.timeout_s, self.retries, log)
 
     def is_present(self) -> bool:

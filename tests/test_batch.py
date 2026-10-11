@@ -382,3 +382,74 @@ class RunNumberInLog(AppCase):
         command = [l for l in self.last_log_lines() if l.startswith("dry run: ")][0]
         self.assertIn("--verbose", command)
         self.assertIn(str(self.tmp / "logs" / "sockseek_0007_mix.log"), command)
+
+
+class BrokenRunVersusEmptyNetwork(AppCase):
+    """Exit 1 means THIS TOOL failed; a track nobody shares is still exit 0.
+
+    sockseek exits non-zero whenever one track fails, so "non-zero" alone cannot mean failure
+    - run #0028 brought 6 of 10 and exited 1. These tests pin the line between the two.
+    """
+
+    INDEX = "filepath,artist,album,title,length,tracktype,state,failurereason\n"
+
+    def setUp(self):
+        super().setUp()
+        self.exe = self.tmp / "dummy.exe"
+        self.exe.write_bytes(b"")
+        self.playlist("A - One | 1:00\nB - Two | 2:00\n")
+
+    def with_status(self, status, index_rows=None):
+        """Run the batch with run_process returning `status`, optionally writing an index."""
+        def fake(cmd, cwd, timeout_s, log):
+            if index_rows is not None:
+                out = Path(cmd[cmd.index("-o") + 1])
+                out.mkdir(parents=True, exist_ok=True)
+                (out / "_index.csv").write_text(self.INDEX + index_rows, encoding="utf-8")
+            return status
+
+        with mock.patch.object(sb_runner, "run_process", fake):
+            return self.batch(dry_run=False, sockseek=self.exe, retries=1)
+
+    def test_a_binary_that_cannot_start_fails_the_run(self):
+        code = self.with_status(sb.ERROR)
+        self.assertEqual(code, 1)
+        text = self.log_text()
+        self.assertIn("could not be started", text)
+        # and it must NOT blame Soulseek for a track it never searched
+        self.assertEqual(self.failed_lines(), [])
+
+    def test_a_timeout_with_nothing_downloaded_fails_the_run(self):
+        code = self.with_status(sb.TIMEOUT)
+        self.assertEqual(code, 1)
+        self.assertIn("killed by the timeout", self.log_text())
+
+    def test_a_non_zero_exit_with_failed_tracks_is_not_a_failure_of_the_tool(self):
+        # the everyday case: sockseek searched, found nothing shared, exited 1
+        code = self.with_status(sb.FAILED, ",,,A - One,60,0,2,9\n,,,B - Two,120,0,2,9\n")
+        self.assertEqual(code, 0)
+        self.assertEqual(self.failed_lines(), ["A - One | 1:00", "B - Two | 2:00"])
+        self.assertNotIn("ERROR", self.log_text())
+
+    def test_a_non_zero_exit_with_no_index_at_all_fails_the_run(self):
+        # sockseek started but wrote nothing: bad arguments, no login, a crash on startup
+        code = self.with_status(sb.FAILED)
+        self.assertEqual(code, 1)
+        self.assertIn("wrote no index", self.log_text())
+        self.assertEqual(self.failed_lines(), [])
+
+    def test_a_non_zero_exit_after_some_tracks_arrived_is_still_exit_zero(self):
+        rows = "one.mp3,,,A - One,60,0,1,0\n,,,B - Two,120,0,2,9\n"
+
+        def fake(cmd, cwd, timeout_s, log):
+            out = Path(cmd[cmd.index("-o") + 1])
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "_index.csv").write_text(self.INDEX + rows, encoding="utf-8")
+            (out / "one.mp3").write_bytes(b"x")
+            return sb.FAILED
+
+        with mock.patch.object(sb_runner, "run_process", fake):
+            self.assertEqual(self.batch(dry_run=False, sockseek=self.exe, retries=1), 0)
+        lines = self.last_log_lines()
+        self.assertIn("OK      A - One | 1:00", lines)
+        self.assertEqual(self.failed_lines(), ["B - Two | 2:00"])

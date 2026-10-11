@@ -102,15 +102,23 @@ class Processes(unittest.TestCase):
         return sb.run_with_retry(cmd, Path.cwd(), timeout, retries, self.logs.append, pause_s=0)
 
     def test_success(self):
-        self.assertTrue(self.run_py("raise SystemExit(0)"))
+        self.assertEqual(self.run_py("raise SystemExit(0)"), sb.OK)
 
-    def test_failure_retries_then_stops(self):
-        self.assertFalse(self.run_py("raise SystemExit(3)", retries=2))
+    def test_failure_retries_then_reports_the_exit(self):
+        # a non-zero exit is the everyday case (one track failed), so the caller gets the
+        # status and decides - it is not the same thing as "could not start"
+        self.assertEqual(self.run_py("raise SystemExit(3)", retries=2), sb.FAILED)
         self.assertEqual(sum("attempt" in m for m in self.logs), 2)
 
-    def test_timeout_kills_process(self):
-        self.assertFalse(self.run_py("import time; time.sleep(30)", retries=1, timeout=1))
+    def test_timeout_kills_process_and_is_reported_as_such(self):
+        self.assertEqual(self.run_py("import time; time.sleep(30)", retries=1, timeout=1),
+                         sb.TIMEOUT)
         self.assertTrue(any("timeout" in m for m in self.logs))
+
+    def test_a_binary_that_cannot_start_is_reported_as_error(self):
+        self.assertEqual(sb.run_with_retry(["no-such-binary-xyz"], Path.cwd(), 5, 2,
+                                           self.logs.append, pause_s=0), sb.ERROR)
+        self.assertEqual(sum("attempt" in m for m in self.logs), 1)  # no point retrying
 
     def test_missing_executable(self):
         self.assertEqual(sb.run_process(["no-such-binary-xyz"], Path.cwd(), 5, self.logs.append), sb.ERROR)

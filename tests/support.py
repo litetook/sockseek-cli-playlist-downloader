@@ -19,6 +19,7 @@ import run
 import soulseek as sb
 from soulseek import batch as sb_batch
 from soulseek import cli as sb_cli
+from soulseek import explain as sb_explain
 from soulseek import quality as sb_quality
 from soulseek import runner as sb_runner
 from soulseek import settings as sb_settings

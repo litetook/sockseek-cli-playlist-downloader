@@ -186,15 +186,21 @@ def install(tool: Tool, log: Callable[[str], None]) -> bool:
             log(f"ERROR checksum mismatch for {raw.name}: expected {tool.sha256}, got {got}")
             return False
         log(f"sha256 ok ({tool.name} {tool.version})")
+        # write beside the target and rename: an OSError halfway (disk full, an antivirus
+        # lock) would otherwise leave a truncated binary that counts as installed from then on
+        part = tool.target.with_name(tool.target.name + ".part")
         try:
             tool.target.parent.mkdir(parents=True, exist_ok=True)
             if tool.archive:
-                if not extract(raw, tool.member or "", tool.target, log):
+                if not extract(raw, tool.member or "", part, log):
+                    part.unlink(missing_ok=True)
                     return False
             else:
-                tool.target.write_bytes(raw.read_bytes())
+                part.write_bytes(raw.read_bytes())
+            part.replace(tool.target)
         except OSError as exc:
             log(f"ERROR cannot write {tool.target}: {exc}")
+            part.unlink(missing_ok=True)
             return False
     if sys.platform != "win32":
         try:
@@ -225,11 +231,23 @@ def ensure(name: str, log: Callable[[str], None], config: Optional[dict] = None,
     return tool.target if install(tool, log) else None
 
 
+def optional(name: str, config: dict) -> bool:
+    """`<tool>.optional: true` - pinned, but nothing needs it yet, so setup.py leaves it out
+    unless asked. It is still fetched on demand the moment something does need it."""
+    return str(config.get(f"{name}.optional", "")).strip().lower() in ("true", "yes", "1")
+
+
 def status(config: Optional[dict] = None, app_dir: Optional[Path] = None) -> list[tuple[Tool, str]]:
-    """Every pinned tool with "ok" or "missing", for `setup.py --check`."""
+    """Every pinned tool with "ok", "missing" or "optional", for `setup.py --check`."""
     config = load() if config is None else config
-    return [(tool, "ok" if tool.present() else "missing")
-            for tool in tools(config, app_dir)]
+    rows = []
+    for tool in tools(config, app_dir):
+        if tool.present():
+            state = "ok"
+        else:
+            state = "optional" if optional(tool.name, config) else "missing"
+        rows.append((tool, state))
+    return rows
 
 
 def python_packages(config: dict) -> list[str]:
