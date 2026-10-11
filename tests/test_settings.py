@@ -308,7 +308,7 @@ class SockseekConfOverride(unittest.TestCase):
 
     def test_the_warning_never_carries_the_values(self):
         self.conf("min-bitrate = 256\n")  # creates the template, warns about it
-        self.assertFalse([w for w in self.warnings if "your-soulseek-password" in w],
+        self.assertFalse([w for w in self.warnings if "your-password" in w],
                          self.warnings)
 
     def test_missing_credentials_names_the_keys_that_are_not_set(self):

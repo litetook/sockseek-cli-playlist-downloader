@@ -23,8 +23,8 @@ SOCKSEEK_LOCAL_CONF = "sockseek.local.conf"  # the login and any override; never
 SOCKSEEK_EFFECTIVE_CONF = "sockseek.effective.conf"  # the two merged, written into work/
 
 LOCAL_CONF_TEMPLATE = """\
-username = your-soulseek-login
-password = your-soulseek-password
+username = your-login
+password = your-password
 """
 
 CREDENTIAL_KEYS = ("username", "password")
@@ -299,12 +299,17 @@ def merge_conf(base: str, override: str) -> str:
     return "\n".join(out + ([""] + tail if tail else [])).rstrip() + "\n"
 
 
+# taken from the template rather than written out again: renaming a placeholder there
+# must not quietly turn "you have not filled this in yet" into "you have"
+_PLACEHOLDERS = frozenset(v for v in parse_conf(LOCAL_CONF_TEMPLATE).values() if v)
+
+
 def missing_credentials(text: str) -> list[str]:
     """Which login keys are absent or still the template placeholder. Values are never
     returned or logged - only the names of the keys."""
     values = parse_conf(text)
     return [key for key in CREDENTIAL_KEYS
-            if not values.get(key) or values[key].startswith("your-soulseek-")]
+            if not values.get(key) or values[key] in _PLACEHOLDERS]
 
 
 def ensure_files(app_dir: Path, warn: Optional[Callable[[str], None]] = None) -> list[str]:

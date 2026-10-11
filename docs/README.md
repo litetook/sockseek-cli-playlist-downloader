@@ -57,8 +57,8 @@ Playlists/ output/ work/ logs/   input, downloads, generated list files, run log
    WARN created sockseek.local.conf: put your Soulseek login there
 
    Put your Soulseek login in ...\sockseek.local.conf:
-       username = your-soulseek-login
-       password = your-soulseek-password
+       username = your-login
+       password = your-password
    Then run this again. Nothing can be downloaded until then.
    ```
 
@@ -68,7 +68,7 @@ Playlists/ output/ work/ logs/   input, downloads, generated list files, run log
 4. Put playlist files into `Playlists/` (next section), or generate one with `--import`.
 
 `sockseek.conf` holds every quality and waiting knob (section 7) and **no credentials**, so it
-can be published. The keys `output-dir`, `length-tol`, `name-format` and `index-path` are
+is safe to share or copy between machines. The keys `output-dir`, `length-tol`, `name-format` and `index-path` are
 deliberately not in it either: the script passes those on every run, so a value in the conf
 would be dead.
 
@@ -269,8 +269,8 @@ this number come from?" is always answered by the log.
 | `paths.playlists` | `--playlists` | `Playlists` | folder of playlist `.txt` files |
 | `paths.output` | `--output` | `output` | where the audio and the index go |
 | `search.length_tol_s` | `--length-tol` | `45` | **seconds**, hard filter around the length in the playlist; `-1` disables. 45 because playlist lengths run short of the shared copies (section 3) |
-| `search.retries` | `--retries` | `2`, **`1` in the shipped file** | attempts per playlist. A retry re-searches what is still missing; it earned a track on run #0002, but it also doubles the wall clock, which is why the shipped file asks for one attempt |
-| `search.playlist_timeout_min` | `--playlist-timeout` | `40`, **`10` in the shipped file** | **MINUTES**, wall clock **per playlist attempt**; `0` = none. 10 because a real 30-track run takes about 6 minutes and anything past that is waiting for nothing |
+| `search.retries` | `--retries` | `2`, **`1` in the default file** | attempts per playlist. A retry re-searches what is still missing; it earned a track on run #0002, but it also doubles the wall clock, which is why the shipped file asks for one attempt |
+| `search.playlist_timeout_min` | `--playlist-timeout` | `40`, **`10` in the default file** | **MINUTES**, wall clock **per playlist attempt**; `0` = none. 10 because a real 30-track run takes about 6 minutes and anything past that is waiting for nothing |
 
 The parser is deliberately not a YAML implementation: it reads `key: value` lines at any
 indentation, ignores section names, tolerates `#` comments and quotes, and reports anything it
@@ -307,7 +307,7 @@ sockseek error, not a Python one.
 `playlist_timeout_min = 40` and `retries = 2`, one playlist can run for up to 2 x 40 minutes
 before the script gives up. It is a wall-clock limit on the whole sockseek process for that
 playlist, not on one track. There is no per-track limit at all: sockseek handles slow or dead
-uploaders itself (`max-stale-time` in `sockseek.conf`, 30 s as shipped, after which it downranks
+uploaders itself (`max-stale-time` in `sockseek.conf`, 30 s by default, after which it downranks
 and finally ignores uploaders that keep failing).
 
 ## 6. The Soulseek 30-minute ban and the `Waiting` status
@@ -397,14 +397,14 @@ sockseek.conf  <  sockseek.local.conf  <  --sockseek-conf FILE
 
 Lowest to highest. Every layer has the same syntax and may hold as few keys as it likes; a key
 replaces the same key of a lower layer, a new key is appended, and a `[profile]` section is
-copied untouched. The published file keeps `username` and `password` commented out rather than
+copied untouched. The default `sockseek.conf` keeps `username` and `password` commented out rather than
 empty, because sockseek refuses a key with an empty value (measured 2026-10-11:
 `Error parsing config ... at line 0`). That is why the local file works as a general override,
 not only as a place for the login:
 
 ```
-username = your-soulseek-login
-password = your-soulseek-password
+username = your-login
+password = your-password
 min-bitrate = 320
 ```
 
@@ -617,7 +617,7 @@ Established 2026-10-07 by measuring the owner's 14 downloaded files with `ffprob
    320 kbps, one of them at **83 kbps**.
 
 All of the above was measured on 2026-10-07 with `ffprobe` over the 14 files from the 2026-10-06
-run. At the shipped tolerance of 3 s exactly one file is flagged; at the tolerance of 1 s that run
+run. At a tolerance of 3 s exactly one file is flagged; at the tolerance of 1 s that run
 actually used, two were outside the window (the second only by 2 s).
 
 **No hard bitrate requirement, by the owner's decision.** The owner deliberately declined

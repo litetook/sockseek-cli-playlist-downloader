@@ -215,8 +215,8 @@ def main(argv: Optional[list[str]] = None,
     if soulseek.SOCKSEEK_LOCAL_CONF in created:
         out("")
         out(f"Put your Soulseek login in {APP_DIR / soulseek.SOCKSEEK_LOCAL_CONF}:")
-        out("    username = your-soulseek-login")
-        out("    password = your-soulseek-password")
+        out("    username = your-login")
+        out("    password = your-password")
         out("Then run this again. Nothing can be downloaded until then.")
         return 2
     config = soulseek.load_config(args.config or APP_DIR / soulseek.CONFIG_NAME, warn=out)

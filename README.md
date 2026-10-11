@@ -57,8 +57,8 @@ Three things to do once:
 
    ```
    Put your Soulseek login in ...\sockseek.local.conf:
-       username = your-soulseek-login
-       password = your-soulseek-password
+       username = your-login
+       password = your-password
    Then run this again.
    ```
 
@@ -126,15 +126,17 @@ fails, which is the everyday case.
 
 ## Configuration
 
-Three files, and every key of each one is listed below. All three are created from built-in
-templates when they are missing, so deleting one brings back the documented values instead of
-losing them silently.
+Three files. Each one is created from a built-in template when it is missing, so deleting a file
+brings back the documented values instead of losing them quietly.
 
-| File | Holds | Read by | In git |
-|---|---|---|---|
-| `config.yaml` | the folders and three numbers | this tool | yes |
-| `sockseek.conf` | quality, waiting, search behaviour | sockseek | yes |
-| `sockseek.local.conf` | the Soulseek login, and any override of the two above | both | **no** |
+| File | Holds | Read by |
+|---|---|---|
+| `config.yaml` | the folders, and three numbers for the search | this tool |
+| `sockseek.conf` | quality, waiting, search behaviour | sockseek |
+| `sockseek.local.conf` | your Soulseek login, plus any key you want changed on this machine | both |
+
+`sockseek.local.conf` is the only one that holds secrets: nothing in the logs prints its values,
+and it is git-ignored.
 
 ### `config.yaml`
 
@@ -150,32 +152,29 @@ search:
   playlist_timeout_min: 10
 ```
 
-| Key | Flag | Shipped | Built-in | What it means |
-|---|---|---|---|---|
-| `paths.sockseek` | `--sockseek` | `sockseek.exe` | `sockseek.exe` | The sockseek binary. `sockseek` without `.exe` is accepted too, so one file works on Windows and macOS |
-| `paths.playlists` | `--playlists` | `Playlists` | `Playlists` | Folder scanned for playlist `.txt` files |
-| `paths.output` | `--output` | `output` | `output` | Where `<playlist>/` folders with the audio and the index go |
-| `search.length_tol_s` | `--length-tol` | `45` | `45` | Seconds around the length on the playlist line. A **hard** condition: a file outside the window is rejected. `-1` turns the filter off |
-| `search.retries` | `--retries` | `1` | `2` | Attempts per playlist. A retry searches only what is still missing; it can earn a track whose uploader timed out, and it doubles the wall clock |
-| `search.playlist_timeout_min` | `--playlist-timeout` | `10` | `40` | Minutes of wall clock for one attempt at one playlist, after which the process is killed. `0` = no limit |
+| Key | Flag | Default | What it means |
+|---|---|---|---|
+| `paths.sockseek` | `--sockseek` | `sockseek.exe` | The sockseek binary. `sockseek` without `.exe` is accepted too, so one file works on Windows and macOS |
+| `paths.playlists` | `--playlists` | `Playlists` | Folder scanned for playlist `.txt` files |
+| `paths.output` | `--output` | `output` | Where `<playlist>/` folders with the audio and the index go |
+| `search.length_tol_s` | `--length-tol` | `45` | Seconds around the length on the playlist line, a **hard** condition; `-1` turns it off. 45 because playlist lengths run shorter than the copies people share: 319 s in the list against 346 s on the network, same remix |
+| `search.retries` | `--retries` | `1` | Attempts per playlist. A retry searches only what is still missing, and doubles the wall clock |
+| `search.playlist_timeout_min` | `--playlist-timeout` | `10` | Minutes for one attempt at one playlist, after which the process is killed. `0` = no limit |
 
-A relative path is relative to the folder holding `run.py`; an absolute one (`output: D:\music`)
-is taken as it is. The command line wins over the file, and every run log opens with the
-effective values and where each came from (`cli`, `config`, `default`).
+A relative path is relative to the folder holding `run.py`; an absolute one is taken as it is.
+The command line wins over the file, and every run log opens with the values in force and where
+each came from (`cli`, `config`, `default`).
 
-The file is read as flat `key: value` pairs — section names are decoration, so `length_tol_s`
-means the same thing wherever it sits. A line that is not a pair, a value below the legal
-minimum and an unknown key are each named in a `WARN` line and then ignored. The old names
-`tol` and `timeout` still work, with a deprecation warning.
-
-45 seconds, not sockseek's default 3, because playlist lengths run systematically shorter than
-the copies people share: 319 s in the list against 346 s on the network for the same remix.
-`--ffprobe-check` uses the same number when it compares the files it measured.
+The file is read as flat `key: value` pairs, so section names are decoration. A line that is not
+a pair, a value below the legal minimum and an unknown key are each named in a `WARN` line and
+then ignored. A key missing from the file falls back to a built-in value, which for two of them
+is not the one above: `retries` 2 and `playlist_timeout_min` 40.
 
 ### `sockseek.conf`
 
-sockseek's own option names without the leading `--`, and its own units.
-`sockseek.exe --help` is the full reference; these are the ones this tool ships with.
+sockseek's own option names without the leading `--`, and its own units; `sockseek.exe --help`
+is the full list. `min-bitrate` is the only hard condition here — every `pref-` key merely ranks
+candidates, and one that fails it is still accepted.
 
 ```
 min-bitrate = 256
@@ -191,61 +190,52 @@ pref-strict-title = true
 pref-strict-artist = true
 ```
 
-| Key | Shipped | What it means |
+| Key | Default | What it means |
 |---|---|---|
-| `min-bitrate` | `256` | **Hard** floor in kbps: anything known to be below is rejected. A file whose uploader reports no bitrate at all is still accepted — the standard Soulseek client reports none |
-| `max-bitrate` | *not set* | A hard ceiling, deliberately absent: no upper limit. Add `max-bitrate = N` if you want one |
-| `pref-min-bitrate` | `320` | Ranking only: candidates at 320 kbps or more are preferred, lower ones still accepted |
-| `pref-max-bitrate` | `1000000` | Ranking only. sockseek's own default is 2500, which ranked 24-bit lossless *below* an mp3 320; this lifts the cap |
-| `pref-format` | `flac,wav,mp3` | Ranking only: these formats are preferred, others still accepted. The list is unordered — flac is not preferred over mp3 by writing it first |
-| `max-stale-time` | `30000` | Milliseconds without transfer activity before a candidate is dropped and the next one tried. A 5-minute window was measured once: 25 minutes on 15 tracks, nothing downloaded |
-| `fast-search` | `true` | Start downloading as soon as a candidate satisfies the preferred conditions, instead of waiting for the whole search to finish |
-| `fast-search-delay` | `2000` | Milliseconds spent collecting candidates before accepting one. sockseek's default is 300, which often means "whoever answered first" |
-| `fast-search-min-up-speed` | `200` | A pass mark for the uploader's reported speed. `1` is sockseek's default and accepts anybody. The unit is not documented and is **not** MB/s: a candidate reported at 0.02 MB/s passed the default |
-| `pref-strict-title` | `true` | Ranking only: prefer candidates whose path contains the track title. With the whole-line titles this tool searches for, it rarely matches, so it changes little |
-| `pref-strict-artist` | `true` | Ranking only: prefer candidates whose path contains the artist |
+| `min-bitrate` | `256` | Hard floor in kbps. A file whose uploader reports no bitrate at all is still accepted - the standard Soulseek client reports none |
+| `max-bitrate` | *not set* | Deliberately absent: no upper limit. Add `max-bitrate = N` if you want one |
+| `pref-min-bitrate` | `320` | Prefer 320 kbps and above |
+| `pref-max-bitrate` | `1000000` | Lifts sockseek's own cap of 2500, which ranked 24-bit lossless below an mp3 320 |
+| `pref-format` | `flac,wav,mp3` | Prefer these formats. The list is unordered: flac is not preferred over mp3 by being written first |
+| `max-stale-time` | `30000` | Milliseconds without transfer activity before a candidate is dropped and the next one tried. This is sockseek's own default: a 5-minute window was tried and measured at 25 minutes on 15 tracks with nothing downloaded |
+| `fast-search` | `true` | Take a file as soon as one passes the preferred conditions, instead of letting the search run out (`search-timeout`, 5 s) and then picking the best of everything that answered |
+| `fast-search-delay` | `2000` | Milliseconds in which answers are only collected and nobody may be taken yet. sockseek's own 300 amounts to "whoever answered first", because answers keep arriving for seconds; 2 s leaves something to choose from |
+| `fast-search-min-up-speed` | `200` | The speed an uploader must report to be taken **early**. It gates that shortcut only - a slower one stays in the normal set and can still be chosen when the search finishes - so no track is lost to it. sockseek's own `1` accepts anybody; the unit is undocumented |
+| `pref-strict-title`, `pref-strict-artist` | `true` | Prefer candidates whose path contains the title / the artist |
 
 **Not set here, and should not be:** `output-dir`, `length-tol`, `name-format` and `index-path`
-are passed on the command line by this tool on every run, so a value in the file would be dead.
-`strict-conditions` would turn every `pref-`/`min-` check into a hard one and discard every
-share from the standard Soulseek client, which reports no bitrate.
+are passed on the command line on every run, so a value in the file would be dead.
+`strict-conditions` would turn every `pref-` check into a hard one and discard every share from
+the standard Soulseek client, which reports no bitrate.
 
-**Left at sockseek's defaults**, and worth knowing: `search-timeout` (5 s per search),
-`searches-per-time` (34) and `searches-renew-time` (220 s) — the limiter that keeps the account
-out of the server's 30-minute ban — `concurrent-searches` (2), `max-retries`, `desperate`,
-`artist-maybe-wrong`, `remove-brackets`, `remove-ft`. A `[profile]` section works as sockseek
-documents it and is passed through untouched.
+**Left at sockseek's own defaults:** `search-timeout` (5 s), `searches-per-time` (34) and
+`searches-renew-time` (220 s) - the limiter that keeps the account out of the server's 30-minute
+ban - `concurrent-searches` (2), `max-retries`, `desperate`, `artist-maybe-wrong`,
+`remove-brackets`, `remove-ft`. A `[profile]` section works as sockseek documents it.
 
 ### `sockseek.local.conf`
 
 ```
-username = your-soulseek-login
-password = your-soulseek-password
+username = your-login
+password = your-password
 ```
 
-| Key | What it means |
-|---|---|
-| `username` | Soulseek account name. Without it a run stops with a message and starts nothing |
-| `password` | Soulseek password. Never printed, never put on a command line |
-| anything else | Any key of `sockseek.conf`, overriding the published value on this machine |
-
-It is git-ignored, it is the only file that holds secrets, and nothing in the logs prints its
-values. A setup script can write into it without touching the published file.
+Your Soulseek account: without it a run stops with a message and starts nothing. Any other key
+of `sockseek.conf` can be repeated here to change it on this machine only.
 
 ### Layers
 
 sockseek reads one config file and has no `include`, so the layers are merged into
-`work/sockseek.effective.conf`, and that file is what sockseek is given:
+`work/sockseek.effective.conf`, and that merged file is what sockseek is given:
 
 ```
-sockseek.conf          published defaults, no login
-  └─ sockseek.local.conf        this machine: the login and anything else
+sockseek.conf                   the defaults that come with the tool
+  └─ sockseek.local.conf        your login, and anything you change on this machine
        └─ --sockseek-conf FILE  this run only
 ```
 
-Every layer has the same syntax and may hold as few keys as it likes — one is fine. A key
-replaces the same key of a lower layer, a new key is added above any `[profile]` section, and
-the profiles themselves are copied untouched.
+Each layer may hold as few keys as it likes. A key replaces the same key of a lower layer, a new
+key is added above any `[profile]` section, and the profiles themselves are copied untouched.
 
 ```bash
 py run.py --only my-playlist --sockseek-conf lossless.conf
@@ -253,8 +243,8 @@ py run.py --only my-playlist --sockseek-conf lossless.conf
 
 ### `dependencies.yaml`
 
-The pinned external tools. `py setup.py --upgrade` rewrites the versions and checksums from the
-newest releases; which asset belongs to which platform stays as written.
+The external tools and their pinned versions. `py setup.py --upgrade` rewrites the versions and
+checksums from the newest releases; which asset belongs to which platform stays as written.
 
 | Key | What it means |
 |---|---|
@@ -262,7 +252,7 @@ newest releases; which asset belongs to which platform stays as written.
 | `<tool>.url` | Download template, with `{version}` and `{asset}` |
 | `<tool>.optional` | `true` means `setup.py` skips it unless `--all`; it is still fetched on demand if something needs it |
 | `<tool>.<platform>.asset` | File name in that release, per `windows`, `macos-arm64`, `macos-x64`, `linux-x64`, `linux-arm` |
-| `<tool>.<platform>.sha256` | Checksum of that file, verified before anything is put in place |
+| `<tool>.<platform>.sha256` | Checksum, verified before the file is put in place |
 | `<tool>.<platform>.member` | The file to take out of an archive; absent means the download is the binary itself |
 | `python.packages` | Pinned `name==version` entries, comma separated, installed into `vendor/`. Empty: this tool uses the standard library only |
 
