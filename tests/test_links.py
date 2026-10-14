@@ -316,3 +316,29 @@ class TheOpeningMenu(ImportingALinkThroughRunPy):
         for argv in (["--only", "mix", "--yes"], ["--import", SPOTIFY_URL]):
             code, text = self.ui(argv, self.reader())
             self.assertNotIn("Where from?", text, argv)
+
+
+class WhatTheChildProcessHandsBack(unittest.TestCase):
+    """yt-dlp is a Python program, and on Windows a Python child writes its output in the
+    console code page unless it is told otherwise - while we read that output as UTF-8.
+
+    Measured 2026-10-14: without this, a SoundCloud title with any character the code page
+    cannot represent arrived as U+FFFD and was written into the playlist file
+    (`RAW - RAWCAST148 \ufffd ALIS.`). The line then goes straight into the search, and
+    Soulseek wants every word of the query to appear in the file path, so such a track can
+    never be found. A real child process is run here rather than a mock: the bug lived in the
+    gap between two programs, which is exactly what a mock would have hidden.
+    """
+
+    def test_a_title_with_accents_survives_the_pipe(self):
+        code, output = sb_links._run(
+            [sys.executable, "-c", "print('Tiësto · Löffler')"])
+        self.assertEqual(code, 0)
+        self.assertEqual(output.strip(), "Tiësto · Löffler")
+        self.assertNotIn("\ufffd", output)
+
+    def test_the_rest_of_the_environment_is_kept(self):
+        # PATH matters: yt-dlp calls ffmpeg and others through it
+        env = sb_links.ytdlp_env()
+        self.assertEqual(env["PYTHONIOENCODING"], "utf-8")
+        self.assertIn("PATH", {name.upper() for name in env})

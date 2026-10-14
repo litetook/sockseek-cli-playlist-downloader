@@ -18,6 +18,7 @@ and the file stays readable and editable afterwards.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -101,9 +102,22 @@ def _fetch(url: str) -> str:
         return response.read().decode("utf-8", "replace")
 
 
+def ytdlp_env() -> dict:
+    """The environment yt-dlp is given, with its output forced to UTF-8.
+
+    yt-dlp is a Python program, and on Windows a Python child writes its output in the console
+    code page, not UTF-8. We read that output as UTF-8, so every character the code page cannot
+    represent arrived as U+FFFD - measured 2026-10-14 on a real import, which wrote
+    `RAW - RAWCAST148 � ALIS.` into a playlist. That is not cosmetic: the line goes
+    straight into the search, and Soulseek wants every word of the query to appear in the file
+    path, so such a track can never be found.
+    """
+    return {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
 def _run(args: list[str]) -> tuple[int, str]:
     done = subprocess.run(args, capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", timeout=YTDLP_TIMEOUT_S)
+                          errors="replace", timeout=YTDLP_TIMEOUT_S, env=ytdlp_env())
     return done.returncode, done.stdout or ""
 
 
